@@ -19,11 +19,13 @@
 
 ## Demo
 
-<a href="https://github.com/anhyobin/mac-app-for-claude-code/releases/download/v0.1.0/demo.mp4">
-  <img src="img/demo-preview.gif" alt="Demo video — click to watch" width="600">
-</a>
+<p align="center">
+  <a href="https://github.com/anhyobin/mac-app-for-claude-code/releases/download/v0.1.0/cc_monitor_demo.mp4">
+    <img src="img/demo-preview.gif" alt="Claude Code Monitor Demo" width="720">
+  </a>
+</p>
 
-> **▶ Click the preview above to watch the full demo video**
+<p align="center"><b>▶ Click the preview to watch the full demo (2 min)</b></p>
 
 ## Why?
 
