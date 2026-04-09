@@ -19,7 +19,11 @@
 
 ## Demo
 
-<video src="https://github.com/anhyobin/mac-app-for-claude-code/raw/main/img/demo.mp4" controls width="600"></video>
+<a href="https://github.com/anhyobin/mac-app-for-claude-code/releases/download/v0.1.0/demo.mp4">
+  <img src="img/demo-preview.gif" alt="Demo video — click to watch" width="600">
+</a>
+
+> **▶ Click the preview above to watch the full demo video**
 
 ## Why?
 
