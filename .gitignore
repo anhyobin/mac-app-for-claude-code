@@ -4,3 +4,7 @@
 xcuserdata/
 DerivedData/
 .swiftpm/xcode/
+
+# Internal QA reports and progress notes — kept locally, not published
+docs/qa/
+docs/progress.md

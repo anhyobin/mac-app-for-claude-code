@@ -139,6 +139,10 @@ Contributions are welcome. If you'd like to help:
 
 Please keep PRs focused — one feature or fix per PR.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

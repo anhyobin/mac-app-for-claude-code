@@ -1,5 +1,10 @@
 import SwiftUI
 
+private enum Layout {
+    static let width: CGFloat = 350
+    static let height: CGFloat = 500
+}
+
 struct MenuBarContentView: View {
     @Environment(ClaudeDataStore.self) private var dataStore
 
@@ -61,8 +66,12 @@ struct MenuBarContentView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
             }
-            .frame(width: 350)
-            .frame(maxHeight: 500)
+            .frame(width: Layout.width)
+            // MenuBarExtra(style: .window) sizes the window from the content's
+            // intrinsic/ideal size. ScrollView reports ideal height = 0, so the
+            // middle region collapses and only header + footer remain (~70 pt).
+            // Pin a fixed height here; ScrollView will fill it.
+            .frame(height: Layout.height)
         }
     }
 }
