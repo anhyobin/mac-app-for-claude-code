@@ -46,16 +46,16 @@ private struct RecentSessionRow: View {
                 }
 
                 HStack(spacing: 4) {
-                    if let model = session.model {
-                        Text(verbatim: ModelNameFormatter.displayName(from: model))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    // Model family badge replaces the prior plain-text model
+                    // name — same info, but the tint makes Opus/Sonnet/Haiku
+                    // distinguishable in a dense list without reading.
+                    ModelBadge(rawModel: session.model)
                     if let duration = session.duration {
-                        Text("\u{00B7}")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                        if session.model != nil {
+                            Text("\u{00B7}")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
                         Text(RelativeTimeFormatter.string(from: duration))
                             .font(.caption)
                             .foregroundStyle(.secondary)

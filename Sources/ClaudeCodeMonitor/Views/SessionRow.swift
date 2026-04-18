@@ -33,6 +33,13 @@ struct SessionRow: View {
 
                     Spacer()
 
+                    // Model family badge (visible without expanding). Kept left of
+                    // the token badge so the family color reads first — that's the
+                    // most-scannable signal when skimming multiple active sessions.
+                    if let expanded = dataStore.expandedSessionData[session.id] {
+                        ModelBadge(rawModel: expanded.mainModel)
+                    }
+
                     // Compact token badge (visible without expanding)
                     if let expanded = dataStore.expandedSessionData[session.id],
                        expanded.totalTokens.total > 0 {
