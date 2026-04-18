@@ -53,6 +53,12 @@ struct SessionRow: View {
                             .clipShape(Capsule())
                     }
 
+                    // Thinking-block counter (hidden when zero so rows without
+                    // extended thinking stay uncluttered).
+                    if let expanded = dataStore.expandedSessionData[session.id] {
+                        ThinkingCounter(count: expanded.mainThinkingBlockCount)
+                    }
+
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)

@@ -66,6 +66,7 @@ private struct RecentSessionRow: View {
                             .foregroundStyle(.tertiary)
                         TokenBadge(count: session.tokens.coreTokens)
                     }
+                    ThinkingCounter(count: session.thinkingBlockCount)
                 }
             }
         }
