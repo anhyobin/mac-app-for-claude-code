@@ -18,6 +18,7 @@ enum JSONLParser {
         var assistantMessageCount = 0
         var tokens = TokenUsage()
         var toolCounts: [String: Int] = [:]
+        var thinkingBlockCount = 0
 
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -85,12 +86,18 @@ enum JSONLParser {
                     ))
                 }
 
-                // Extract tool_use counts
+                // Extract tool_use counts and thinking blocks in a single pass.
                 if let content = message["content"] as? [[String: Any]] {
                     for block in content {
-                        if block["type"] as? String == "tool_use",
-                           let name = block["name"] as? String {
-                            toolCounts[name, default: 0] += 1
+                        switch block["type"] as? String {
+                        case "tool_use":
+                            if let name = block["name"] as? String {
+                                toolCounts[name, default: 0] += 1
+                            }
+                        case "thinking":
+                            thinkingBlockCount += 1
+                        default:
+                            break
                         }
                     }
                 }
@@ -119,36 +126,63 @@ enum JSONLParser {
             tokens: tokens,
             toolCounts: toolCounts,
             model: model,
-            slug: slug
+            slug: slug,
+            thinkingBlockCount: thinkingBlockCount
         )
     }
 
     // MARK: - Lightweight Token-Only Parsing
 
+    /// Lightweight aggregate of tokens plus thinking-block count for the active
+    /// session view. Kept as a tiny value type so ``scanTokensAndThinking`` can
+    /// return both numbers from a single pass without changing the hot path
+    /// (``scanTokensOnly``) that other call sites still rely on.
+    struct SessionQuickStats: Sendable {
+        var tokens: TokenUsage
+        var thinkingBlockCount: Int
+    }
+
     /// Extracts only token usage from a JSONL file — much faster than full scanSessionSummary.
     static func scanTokensOnly(at path: URL) -> TokenUsage {
-        guard let (data, _) = readFileIfAllowed(at: path) else { return TokenUsage() }
+        scanTokensAndThinking(at: path).tokens
+    }
+
+    /// Extracts token usage AND thinking-block count in a single pass.
+    /// Used by ``ClaudeDataStore`` to populate ``SessionExpandedData`` for
+    /// active sessions, where both numbers are needed per refresh.
+    static func scanTokensAndThinking(at path: URL) -> SessionQuickStats {
+        guard let (data, _) = readFileIfAllowed(at: path) else {
+            return SessionQuickStats(tokens: TokenUsage(), thinkingBlockCount: 0)
+        }
 
         let lines = data.split(separator: UInt8(ascii: "\n"))
         var tokens = TokenUsage()
+        var thinkingBlockCount = 0
 
         for lineData in lines {
             let lineStr = String(decoding: lineData, as: UTF8.self)
             guard lineStr.contains("\"type\":\"assistant\"") else { continue }
 
             guard let entry = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let message = entry["message"] as? [String: Any],
-                  let usage = message["usage"] as? [String: Any] else { continue }
+                  let message = entry["message"] as? [String: Any] else { continue }
 
-            tokens.add(TokenUsage(
-                inputTokens: usage["input_tokens"] as? Int ?? 0,
-                outputTokens: usage["output_tokens"] as? Int ?? 0,
-                cacheReadTokens: usage["cache_read_input_tokens"] as? Int ?? 0,
-                cacheWriteTokens: usage["cache_creation_input_tokens"] as? Int ?? 0
-            ))
+            if let usage = message["usage"] as? [String: Any] {
+                tokens.add(TokenUsage(
+                    inputTokens: usage["input_tokens"] as? Int ?? 0,
+                    outputTokens: usage["output_tokens"] as? Int ?? 0,
+                    cacheReadTokens: usage["cache_read_input_tokens"] as? Int ?? 0,
+                    cacheWriteTokens: usage["cache_creation_input_tokens"] as? Int ?? 0
+                ))
+            }
+
+            if let content = message["content"] as? [[String: Any]] {
+                for block in content where block["type"] as? String == "thinking" {
+                    thinkingBlockCount += 1
+                }
+            }
         }
 
-        return tokens
+        return SessionQuickStats(tokens: tokens, thinkingBlockCount: thinkingBlockCount)
     }
 
     // MARK: - Agent Detail Parsing

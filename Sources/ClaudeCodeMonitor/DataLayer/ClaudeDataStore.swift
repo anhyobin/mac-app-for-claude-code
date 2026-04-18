@@ -185,6 +185,7 @@ final class ClaudeDataStore {
         let previousAgents = expandedSessionData[sessionId]?.agents
         let previousMtime = expandedSessionData[sessionId]?.mainJSONLMtime
         let previousMainTokens = expandedSessionData[sessionId]?.mainTokens
+        let previousThinking = expandedSessionData[sessionId]?.mainThinkingBlockCount
 
         let result = await Task.detached {
             let agents = SubagentLoader.loadAgents(
@@ -206,15 +207,22 @@ final class ClaudeDataStore {
                 return attrs[.modificationDate] as? Date
             }()
 
-            // Reuse cached mainTokens if mtime unchanged (skip expensive re-parse)
+            // Reuse cached mainTokens and thinking count if mtime unchanged —
+            // parsing a large JSONL twice per refresh cycle is the hottest
+            // operation in the app, so both numbers share the same cache gate.
             let mainTokens: TokenUsage
+            let mainThinkingBlockCount: Int
             if let prevMtime = previousMtime,
                let curMtime = currentMtime,
                prevMtime == curMtime,
-               let cached = previousMainTokens {
-                mainTokens = cached
+               let cachedTokens = previousMainTokens,
+               let cachedThinking = previousThinking {
+                mainTokens = cachedTokens
+                mainThinkingBlockCount = cachedThinking
             } else {
-                mainTokens = JSONLParser.scanTokensOnly(at: mainJSONLPath)
+                let stats = JSONLParser.scanTokensAndThinking(at: mainJSONLPath)
+                mainTokens = stats.tokens
+                mainThinkingBlockCount = stats.thinkingBlockCount
             }
 
             // Total = main session tokens + all subagent tokens
@@ -228,7 +236,8 @@ final class ClaudeDataStore {
                 tasks: tasks,
                 mainTokens: mainTokens,
                 totalTokens: totalTokens,
-                mainJSONLMtime: currentMtime
+                mainJSONLMtime: currentMtime,
+                mainThinkingBlockCount: mainThinkingBlockCount
             )
         }.value
 
