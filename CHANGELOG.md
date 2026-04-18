@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - Unreleased
+
+### Added
+- Recognition for the Opus / Sonnet / Haiku 4.7 generation, with a model family
+  accent color (Opus=orange, Sonnet=blue, Haiku=green) used by session rows.
+- Per-session extended-thinking block counter, parsed from the session JSONL
+  and surfaced on the active session row.
+- Context-window usage ratio per session, derived from a new
+  `ModelContextLimits` table (1M tokens for Opus/Sonnet 4.7, 200K for
+  earlier generations). Powers the upcoming context gauge.
+- `MenuBarDotState` with a priority stack (error > warning > processing >
+  active > inactive > hidden) exposed from `ClaudeDataStore` for the
+  menu-bar status dot.
+
+### Notes
+- Opus 4.7 uses a new tokenizer — token counts may read 1.0~1.35× higher
+  than Opus 4.6 for the same work.
+
 ## [0.1.1] - 2026-04-18
 
 ### Fixed

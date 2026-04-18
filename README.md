@@ -139,6 +139,10 @@ Contributions are welcome. If you'd like to help:
 
 Please keep PRs focused — one feature or fix per PR.
 
+## Notes
+
+- Opus 4.7 uses a new tokenizer — token counts may read 1.0~1.35× higher than Opus 4.6 for the same work.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for the release history.
