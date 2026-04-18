@@ -133,13 +133,17 @@ enum JSONLParser {
 
     // MARK: - Lightweight Token-Only Parsing
 
-    /// Lightweight aggregate of tokens plus thinking-block count for the active
-    /// session view. Kept as a tiny value type so ``scanTokensAndThinking`` can
-    /// return both numbers from a single pass without changing the hot path
-    /// (``scanTokensOnly``) that other call sites still rely on.
+    /// Lightweight aggregate of tokens, thinking-block count, and model name
+    /// for the active session view. Kept as a tiny value type so
+    /// ``scanTokensAndThinking`` can return everything from a single pass
+    /// without changing the hot path (``scanTokensOnly``) that other call
+    /// sites still rely on.
     struct SessionQuickStats: Sendable {
         var tokens: TokenUsage
         var thinkingBlockCount: Int
+        /// Raw model string from the first assistant message that reports one.
+        /// `nil` when the session has no assistant messages yet.
+        var model: String?
     }
 
     /// Extracts only token usage from a JSONL file — much faster than full scanSessionSummary.
@@ -147,17 +151,18 @@ enum JSONLParser {
         scanTokensAndThinking(at: path).tokens
     }
 
-    /// Extracts token usage AND thinking-block count in a single pass.
+    /// Extracts token usage, thinking-block count, and model name in a single pass.
     /// Used by ``ClaudeDataStore`` to populate ``SessionExpandedData`` for
-    /// active sessions, where both numbers are needed per refresh.
+    /// active sessions, where all three values are needed per refresh.
     static func scanTokensAndThinking(at path: URL) -> SessionQuickStats {
         guard let (data, _) = readFileIfAllowed(at: path) else {
-            return SessionQuickStats(tokens: TokenUsage(), thinkingBlockCount: 0)
+            return SessionQuickStats(tokens: TokenUsage(), thinkingBlockCount: 0, model: nil)
         }
 
         let lines = data.split(separator: UInt8(ascii: "\n"))
         var tokens = TokenUsage()
         var thinkingBlockCount = 0
+        var model: String?
 
         for lineData in lines {
             let lineStr = String(decoding: lineData, as: UTF8.self)
@@ -165,6 +170,10 @@ enum JSONLParser {
 
             guard let entry = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                   let message = entry["message"] as? [String: Any] else { continue }
+
+            if model == nil, let m = message["model"] as? String {
+                model = m
+            }
 
             if let usage = message["usage"] as? [String: Any] {
                 tokens.add(TokenUsage(
@@ -182,7 +191,7 @@ enum JSONLParser {
             }
         }
 
-        return SessionQuickStats(tokens: tokens, thinkingBlockCount: thinkingBlockCount)
+        return SessionQuickStats(tokens: tokens, thinkingBlockCount: thinkingBlockCount, model: model)
     }
 
     // MARK: - Agent Detail Parsing

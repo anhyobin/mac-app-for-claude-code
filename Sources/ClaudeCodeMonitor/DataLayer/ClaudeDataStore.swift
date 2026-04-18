@@ -178,6 +178,68 @@ final class ClaudeDataStore {
         return results
     }
 
+    // MARK: - Menu Bar Dot State
+
+    /// Aggregate status for the menu-bar dot across all active sessions.
+    ///
+    /// Priority stack (highest first): error > warning > processing > active
+    /// > inactive > hidden. Only one state is surfaced; if one session is
+    /// in warning and another is only inactive, the dot shows warning.
+    ///
+    /// v0.2 scope: `processing` is NOT currently computed. Detecting
+    /// "tool_use without a matching tool_result" would require an additional
+    /// JSONL pass on every 5s refresh for every active session, and the cost
+    /// /value tradeoff felt wrong until the view is wired up. See the
+    /// TODO(v0.3) comment inline.
+    ///
+    /// `error` is also not currently raised — reserved for future parser /
+    /// filesystem failure surfacing.
+    var menuBarDotState: MenuBarDotState {
+        guard !activeSessions.isEmpty else { return .hidden }
+
+        let activityWindow: TimeInterval = 60
+        let warningThreshold: Double = 0.95
+        let now = Date()
+
+        var highest: MenuBarDotState = .inactive
+
+        for session in activeSessions {
+            let expanded = expandedSessionData[session.id]
+
+            // Warning: context window ≥ 95% full. Needs both expanded data
+            // (for token totals) AND a known model (for the limit). Sessions
+            // that haven't been expanded yet, or whose model we can't identify,
+            // can't trigger warning — they fall through to active/inactive.
+            if let expanded,
+               let model = expanded.mainModel,
+               let ratio = expanded.contextUsageRatio(model: model),
+               ratio >= warningThreshold,
+               MenuBarDotState.warning.priority > highest.priority {
+                highest = .warning
+                continue
+            }
+
+            // TODO(v0.3): processing state — detect unmatched tool_use blocks
+            // via a lightweight tail-scan of the main session JSONL. Skipped
+            // in v0.2 because the scan would run per-refresh per-session.
+
+            // Active vs. inactive: use the main JSONL's mtime as a proxy for
+            // "last assistant turn". Active sessions are eagerly expanded so
+            // mainJSONLMtime should be populated; fall back to the session's
+            // own lastActivity, then to inactive.
+            let lastActivity = expanded?.mainJSONLMtime ?? session.lastActivity
+            if let lastActivity, now.timeIntervalSince(lastActivity) < activityWindow {
+                if MenuBarDotState.active.priority > highest.priority {
+                    highest = .active
+                }
+            }
+            // If neither branch fired, `highest` stays at its current value
+            // (defaulting to .inactive for the first session we examine).
+        }
+
+        return highest
+    }
+
     func loadSessionDetail(sessionId: String, projectPath: String, forceRefresh: Bool = false) async {
         // Return cached data if available (unless force refresh)
         if !forceRefresh, expandedSessionData[sessionId] != nil { return }
@@ -186,6 +248,7 @@ final class ClaudeDataStore {
         let previousMtime = expandedSessionData[sessionId]?.mainJSONLMtime
         let previousMainTokens = expandedSessionData[sessionId]?.mainTokens
         let previousThinking = expandedSessionData[sessionId]?.mainThinkingBlockCount
+        let previousModel = expandedSessionData[sessionId]?.mainModel
 
         let result = await Task.detached {
             let agents = SubagentLoader.loadAgents(
@@ -207,11 +270,12 @@ final class ClaudeDataStore {
                 return attrs[.modificationDate] as? Date
             }()
 
-            // Reuse cached mainTokens and thinking count if mtime unchanged —
-            // parsing a large JSONL twice per refresh cycle is the hottest
-            // operation in the app, so both numbers share the same cache gate.
+            // Reuse cached mainTokens, thinking count, and model if mtime
+            // unchanged — parsing a large JSONL per refresh is the hottest
+            // operation in the app, so all three share the same cache gate.
             let mainTokens: TokenUsage
             let mainThinkingBlockCount: Int
+            let mainModel: String?
             if let prevMtime = previousMtime,
                let curMtime = currentMtime,
                prevMtime == curMtime,
@@ -219,10 +283,12 @@ final class ClaudeDataStore {
                let cachedThinking = previousThinking {
                 mainTokens = cachedTokens
                 mainThinkingBlockCount = cachedThinking
+                mainModel = previousModel
             } else {
                 let stats = JSONLParser.scanTokensAndThinking(at: mainJSONLPath)
                 mainTokens = stats.tokens
                 mainThinkingBlockCount = stats.thinkingBlockCount
+                mainModel = stats.model
             }
 
             // Total = main session tokens + all subagent tokens
@@ -237,7 +303,8 @@ final class ClaudeDataStore {
                 mainTokens: mainTokens,
                 totalTokens: totalTokens,
                 mainJSONLMtime: currentMtime,
-                mainThinkingBlockCount: mainThinkingBlockCount
+                mainThinkingBlockCount: mainThinkingBlockCount,
+                mainModel: mainModel
             )
         }.value
 

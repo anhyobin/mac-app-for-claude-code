@@ -12,6 +12,12 @@ struct SessionExpandedData: Sendable {
     /// intentionally excluded for v0.2 because the UI surface is the session row,
     /// not the aggregate. Call sites should treat this as "main session only".
     let mainThinkingBlockCount: Int
+    /// Raw model string for the main session (e.g. `claude-opus-4-7-20260315`).
+    ///
+    /// Pulled from the first assistant message's `model` field. `nil` when the
+    /// session has no assistant turns yet, in which case context-window gauges
+    /// and model badges should be hidden.
+    let mainModel: String?
 
     /// Ratio (0.0–1.0+) of how full the context window is for the given model.
     ///
