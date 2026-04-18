@@ -17,6 +17,10 @@ enum ModelContextLimits {
     /// Matching is case-insensitive and keyword-based. The 4.7 generation must
     /// be checked before the broader "opus"/"sonnet-4" patterns so that a
     /// 1M-context 4.7 model isn't misclassified as a 200K model.
+    ///
+    /// Haiku is intentionally unlisted — every shipped Haiku version is 200K,
+    /// which is also the safe default, so it falls through the final branch.
+    /// Revisit if Haiku ever ships with an expanded window.
     static func maxContext(for rawModel: String) -> Int {
         let lower = rawModel.lowercased()
         if lower.contains("opus-4-7") || lower.contains("sonnet-4-7") {

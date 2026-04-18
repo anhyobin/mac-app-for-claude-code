@@ -186,14 +186,13 @@ final class ClaudeDataStore {
     /// > inactive > hidden. Only one state is surfaced; if one session is
     /// in warning and another is only inactive, the dot shows warning.
     ///
-    /// v0.2 scope: `processing` is NOT currently computed. Detecting
-    /// "tool_use without a matching tool_result" would require an additional
-    /// JSONL pass on every 5s refresh for every active session, and the cost
-    /// /value tradeoff felt wrong until the view is wired up. See the
-    /// TODO(v0.3) comment inline.
-    ///
-    /// `error` is also not currently raised — reserved for future parser /
-    /// filesystem failure surfacing.
+    /// v0.2 scope:
+    /// - `processing` is NOT computed — detecting "tool_use without a matching
+    ///   tool_result" would require an extra JSONL pass per 5s refresh per
+    ///   session. Revisit after the view is wired up. See TODO(v0.3) inline.
+    /// - `error` is raised when the main session JSONL is truncated (exceeds
+    ///   the 50MB parser cap). Parser / filesystem failures that return
+    ///   `truncated: true` otherwise also surface here.
     var menuBarDotState: MenuBarDotState {
         guard !activeSessions.isEmpty else { return .hidden }
 
@@ -206,10 +205,19 @@ final class ClaudeDataStore {
         for session in activeSessions {
             let expanded = expandedSessionData[session.id]
 
+            // Error: main session JSONL couldn't be parsed (oversize / read
+            // failure). A truncated session is exactly the case where the
+            // window is most likely full, so surface it above warning.
+            if expanded?.mainTruncated == true,
+               MenuBarDotState.error.priority > highest.priority {
+                highest = .error
+                continue
+            }
+
             // Warning: context window ≥ 95% full. Needs both expanded data
-            // (for token totals) AND a known model (for the limit). Sessions
-            // that haven't been expanded yet, or whose model we can't identify,
-            // can't trigger warning — they fall through to active/inactive.
+            // (for the last-turn snapshot) AND a known model (for the limit).
+            // Sessions that haven't been expanded yet, or whose model we
+            // can't identify, can't trigger warning — they fall through.
             if let expanded,
                let model = expanded.mainModel,
                let ratio = expanded.contextUsageRatio(model: model),
@@ -225,16 +233,20 @@ final class ClaudeDataStore {
 
             // Active vs. inactive: use the main JSONL's mtime as a proxy for
             // "last assistant turn". Active sessions are eagerly expanded so
-            // mainJSONLMtime should be populated; fall back to the session's
-            // own lastActivity, then to inactive.
+            // mainJSONLMtime should be populated for anything beyond its very
+            // first refresh cycle; before that the session stays at inactive.
+            // NOTE: `session.lastActivity` is currently always nil (see
+            // SessionFileReader), so the fallback is effectively dead. Kept as
+            // a no-op so a future SessionFileReader enhancement that populates
+            // lastActivity would wire through automatically.
             let lastActivity = expanded?.mainJSONLMtime ?? session.lastActivity
             if let lastActivity, now.timeIntervalSince(lastActivity) < activityWindow {
                 if MenuBarDotState.active.priority > highest.priority {
                     highest = .active
                 }
             }
-            // If neither branch fired, `highest` stays at its current value
-            // (defaulting to .inactive for the first session we examine).
+            // Otherwise `highest` stays at its current value (the loop's
+            // initial `.inactive`, or a stronger state from a prior session).
         }
 
         return highest
@@ -249,6 +261,8 @@ final class ClaudeDataStore {
         let previousMainTokens = expandedSessionData[sessionId]?.mainTokens
         let previousThinking = expandedSessionData[sessionId]?.mainThinkingBlockCount
         let previousModel = expandedSessionData[sessionId]?.mainModel
+        let previousLastTurn = expandedSessionData[sessionId]?.mainLastTurnUsage
+        let previousTruncated = expandedSessionData[sessionId]?.mainTruncated ?? false
 
         let result = await Task.detached {
             let agents = SubagentLoader.loadAgents(
@@ -270,12 +284,14 @@ final class ClaudeDataStore {
                 return attrs[.modificationDate] as? Date
             }()
 
-            // Reuse cached mainTokens, thinking count, and model if mtime
-            // unchanged — parsing a large JSONL per refresh is the hottest
-            // operation in the app, so all three share the same cache gate.
+            // Reuse cached main-session stats when mtime is unchanged —
+            // parsing a large JSONL per refresh is the hottest operation in
+            // the app, so all derived values share the same cache gate.
             let mainTokens: TokenUsage
             let mainThinkingBlockCount: Int
             let mainModel: String?
+            let mainLastTurnUsage: TokenUsage?
+            let mainTruncated: Bool
             if let prevMtime = previousMtime,
                let curMtime = currentMtime,
                prevMtime == curMtime,
@@ -284,11 +300,15 @@ final class ClaudeDataStore {
                 mainTokens = cachedTokens
                 mainThinkingBlockCount = cachedThinking
                 mainModel = previousModel
+                mainLastTurnUsage = previousLastTurn
+                mainTruncated = previousTruncated
             } else {
                 let stats = JSONLParser.scanTokensAndThinking(at: mainJSONLPath)
                 mainTokens = stats.tokens
                 mainThinkingBlockCount = stats.thinkingBlockCount
                 mainModel = stats.model
+                mainLastTurnUsage = stats.lastTurnUsage
+                mainTruncated = stats.truncated
             }
 
             // Total = main session tokens + all subagent tokens
@@ -304,7 +324,9 @@ final class ClaudeDataStore {
                 totalTokens: totalTokens,
                 mainJSONLMtime: currentMtime,
                 mainThinkingBlockCount: mainThinkingBlockCount,
-                mainModel: mainModel
+                mainModel: mainModel,
+                mainLastTurnUsage: mainLastTurnUsage,
+                mainTruncated: mainTruncated
             )
         }.value
 

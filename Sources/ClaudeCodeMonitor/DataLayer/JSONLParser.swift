@@ -133,36 +133,68 @@ enum JSONLParser {
 
     // MARK: - Lightweight Token-Only Parsing
 
-    /// Lightweight aggregate of tokens, thinking-block count, and model name
-    /// for the active session view. Kept as a tiny value type so
-    /// ``scanTokensAndThinking`` can return everything from a single pass
-    /// without changing the hot path (``scanTokensOnly``) that other call
-    /// sites still rely on.
+    /// Lightweight aggregate of tokens, thinking-block count, model name, and
+    /// the *last assistant turn's* usage snapshot.
+    ///
+    /// `tokens` is the cumulative sum across all assistant turns — meaningful
+    /// for "total usage" displays but NOT for context-window fullness
+    /// (because `cache_read_input_tokens` is reported per-turn and accumulates
+    /// across stable cache reads, which would multi-count window occupancy).
+    ///
+    /// `lastTurnUsage` is the raw usage block from the *most recent* assistant
+    /// message. This is what should drive context-window ratios: it's a single
+    /// point-in-time snapshot of what the model saw on its last request.
+    /// `nil` when the session has no assistant messages yet.
+    ///
+    /// `truncated` indicates that the file exceeded the 50MB size cap and the
+    /// stats are empty/stale. Callers can treat this as "unknown state" rather
+    /// than "zero usage" to avoid misreporting a full window as empty.
     struct SessionQuickStats: Sendable {
         var tokens: TokenUsage
         var thinkingBlockCount: Int
         /// Raw model string from the first assistant message that reports one.
         /// `nil` when the session has no assistant messages yet.
         var model: String?
+        /// Snapshot of the usage block on the most recent assistant turn.
+        /// Used to estimate current context-window occupancy without the
+        /// per-turn accumulation pitfall of summed `cache_read_input_tokens`.
+        var lastTurnUsage: TokenUsage?
+        /// True when the source JSONL exceeded the max file size and was not
+        /// parsed. Views should render an "unknown" state rather than "empty".
+        var truncated: Bool
     }
 
     /// Extracts only token usage from a JSONL file — much faster than full scanSessionSummary.
+    ///
+    /// Kept as a legacy forwarder; no current callers as of v0.2. Retained so a
+    /// caller wanting *just* the token sum without the quick-stats struct has a
+    /// named API. Safe to delete once someone confirms no external references.
     static func scanTokensOnly(at path: URL) -> TokenUsage {
         scanTokensAndThinking(at: path).tokens
     }
 
-    /// Extracts token usage, thinking-block count, and model name in a single pass.
-    /// Used by ``ClaudeDataStore`` to populate ``SessionExpandedData`` for
-    /// active sessions, where all three values are needed per refresh.
+    /// Extracts cumulative tokens, thinking-block count, model name, and the
+    /// last assistant turn's usage snapshot in a single pass. Used by
+    /// ``ClaudeDataStore`` to populate ``SessionExpandedData`` for active
+    /// sessions, where all four values are needed per refresh.
     static func scanTokensAndThinking(at path: URL) -> SessionQuickStats {
         guard let (data, _) = readFileIfAllowed(at: path) else {
-            return SessionQuickStats(tokens: TokenUsage(), thinkingBlockCount: 0, model: nil)
+            // File missing, over 50MB, or unreadable. Surface as `truncated` so
+            // the view layer doesn't misinterpret "no data" as "empty window".
+            return SessionQuickStats(
+                tokens: TokenUsage(),
+                thinkingBlockCount: 0,
+                model: nil,
+                lastTurnUsage: nil,
+                truncated: true
+            )
         }
 
         let lines = data.split(separator: UInt8(ascii: "\n"))
         var tokens = TokenUsage()
         var thinkingBlockCount = 0
         var model: String?
+        var lastTurnUsage: TokenUsage?
 
         for lineData in lines {
             let lineStr = String(decoding: lineData, as: UTF8.self)
@@ -176,12 +208,16 @@ enum JSONLParser {
             }
 
             if let usage = message["usage"] as? [String: Any] {
-                tokens.add(TokenUsage(
+                let turn = TokenUsage(
                     inputTokens: usage["input_tokens"] as? Int ?? 0,
                     outputTokens: usage["output_tokens"] as? Int ?? 0,
                     cacheReadTokens: usage["cache_read_input_tokens"] as? Int ?? 0,
                     cacheWriteTokens: usage["cache_creation_input_tokens"] as? Int ?? 0
-                ))
+                )
+                tokens.add(turn)
+                // Overwrite on every assistant turn so the final value is the
+                // most recent one — this is the point-in-time window snapshot.
+                lastTurnUsage = turn
             }
 
             if let content = message["content"] as? [[String: Any]] {
@@ -191,7 +227,13 @@ enum JSONLParser {
             }
         }
 
-        return SessionQuickStats(tokens: tokens, thinkingBlockCount: thinkingBlockCount, model: model)
+        return SessionQuickStats(
+            tokens: tokens,
+            thinkingBlockCount: thinkingBlockCount,
+            model: model,
+            lastTurnUsage: lastTurnUsage,
+            truncated: false
+        )
     }
 
     // MARK: - Agent Detail Parsing
@@ -327,8 +369,15 @@ enum JSONLParser {
 
     private static func readFileIfAllowed(at path: URL) -> (Data, UInt64)? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path.path),
-              let fileSize = attrs[.size] as? UInt64,
-              fileSize <= maxFileSize else {
+              let fileSize = attrs[.size] as? UInt64 else {
+            return nil
+        }
+        if fileSize > maxFileSize {
+            // Oversize JSONLs almost certainly correspond to sessions with very
+            // full context windows — the exact case where we MOST want an
+            // accurate warning dot. Log once so operators can see we're
+            // skipping, and let the caller surface `truncated: true` upstream.
+            print("[JSONLParser] Skipping oversize file (\(fileSize) bytes > \(maxFileSize)): \(path.lastPathComponent)")
             return nil
         }
         guard let data = try? Data(contentsOf: path) else {

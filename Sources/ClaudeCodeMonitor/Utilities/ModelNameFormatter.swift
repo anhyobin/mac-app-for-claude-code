@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// The family is derived from the raw model string via ``ModelNameFormatter/family(from:)``.
 /// ``unknown`` is returned when the raw string does not match any known family keyword.
-enum ModelFamily: Sendable {
+enum ModelFamily: Sendable, Equatable {
     case opus
     case sonnet
     case haiku
