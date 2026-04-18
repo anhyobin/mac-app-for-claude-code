@@ -38,6 +38,20 @@ struct SessionDetailView: View {
                 }
             }
 
+            // Context window detail. Only rendered when the gauge itself would
+            // render — keeps the row quiet for sessions where the ratio is
+            // unknown (no assistant turn yet, unknown model).
+            if let model = data.mainModel,
+               let ratio = data.contextUsageRatio(model: model),
+               let snapshot = data.mainLastTurnUsage {
+                let used = snapshot.inputTokens + snapshot.cacheReadTokens + snapshot.cacheWriteTokens
+                let limit = ModelContextLimits.maxContext(for: model)
+                Text("Context: \(TokenFormatter.compact(used)) / \(TokenFormatter.compact(limit)) (\(Int((min(ratio, 1.0)) * 100))%)")
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+
             // Active agents section
             if !activeAgents.isEmpty {
                 HStack(spacing: 4) {

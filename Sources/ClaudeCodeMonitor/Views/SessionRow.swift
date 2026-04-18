@@ -63,6 +63,16 @@ struct SessionRow: View {
             }
             .buttonStyle(.plain)
 
+            // Context window gauge. Lives outside the button's contentShape so
+            // tapping the bar does not toggle expansion. Uses the same
+            // horizontal padding as the row content for visual alignment.
+            if let expanded = dataStore.expandedSessionData[session.id],
+               let ratio = expanded.contextUsageRatio(model: expanded.mainModel) {
+                ContextGauge(ratio: ratio)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 2)
+            }
+
             if isExpanded {
                 if let data = dataStore.expandedSessionData[session.id] {
                     SessionDetailView(
