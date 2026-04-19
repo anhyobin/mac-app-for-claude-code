@@ -158,6 +158,6 @@ swift test
 | 키 | 값 | 설명 |
 |----|-----|------|
 | `CFBundleIdentifier` | `com.anhyobin.ClaudeCodeMonitor` | 앱 번들 ID |
-| `CFBundleShortVersionString` | `0.1.0` | 앱 버전 |
+| `CFBundleShortVersionString` | `0.2.0` | 앱 버전 |
 | `LSUIElement` | `true` | Dock에 아이콘 표시하지 않음 |
 | `LSMinimumSystemVersion` | `14.0` | 최소 macOS 버전 |
