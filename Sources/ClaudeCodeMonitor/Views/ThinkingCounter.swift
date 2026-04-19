@@ -24,6 +24,7 @@ struct ThinkingCounter: View {
             .foregroundStyle(.secondary)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(count) thinking blocks")
+            .help("Extended thinking blocks")
         }
     }
 }

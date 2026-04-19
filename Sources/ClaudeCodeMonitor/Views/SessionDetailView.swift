@@ -52,6 +52,19 @@ struct SessionDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
+            // Thinking blocks detail. Spells out what the brain badge in the
+            // session row is counting — the badge alone is not self-explanatory.
+            if data.mainThinkingBlockCount > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "brain")
+                        .font(.caption2)
+                    Text("Thinking: \(data.mainThinkingBlockCount) blocks")
+                        .font(.caption2)
+                        .monospacedDigit()
+                }
+                .foregroundStyle(.secondary)
+            }
+
             // Active agents section
             if !activeAgents.isEmpty {
                 HStack(spacing: 4) {
