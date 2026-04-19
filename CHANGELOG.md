@@ -7,23 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-04-20
 
 ### Added
-- Recognition for the Opus / Sonnet / Haiku 4.7 generation, with a model family
-  accent color (Opus=orange, Sonnet=blue, Haiku=green) used by session rows.
-- Per-session extended-thinking block counter, parsed from the session JSONL
-  and surfaced on the active session row.
-- Context-window usage ratio per session, derived from a new
-  `ModelContextLimits` table (1M tokens for Opus/Sonnet 4.7, 200K for
-  earlier generations). Powers the upcoming context gauge.
-- `MenuBarDotState` with a priority stack (error > warning > processing >
-  active > inactive > hidden) exposed from `ClaudeDataStore` for the
-  menu-bar status dot.
+- **Model badge** on active and recent session rows, surfacing the model in
+  use (e.g. "Opus 4.7") with a family accent color — Opus=orange,
+  Sonnet=blue, Haiku=green. Active sessions previously showed no model at
+  all; recent sessions showed only a plain text name.
+- **Opus / Sonnet / Haiku 4.7** recognition in `ModelNameFormatter`, with
+  the 4.7 generation matched before 4.6 to avoid prefix shadowing. Also
+  filled in the missing `haiku-4-6` entry for family matrix completeness.
+- **Extended-thinking block counter** (`🧠 N`) on every session row, parsed
+  from `content[].type == "thinking"` blocks in the session JSONL. Hidden
+  when zero so rows without thinking stay uncluttered. Expanded detail view
+  shows the full label "Thinking: N blocks" under the Context line for
+  first-time discoverability.
+- **Context-window gauge** — a 2pt hairline bar at the bottom of each
+  active session row showing `lastTurn usage / model max`. Secondary below
+  80%, orange at 80–94%, red at 95%+. Expanded detail view adds a
+  tabular-num readout like `312K / 1M (31%)`. Backed by a new
+  `ModelContextLimits` table (1M for Opus/Sonnet 4.7, 200K for earlier
+  generations) and a `contextUsageRatio` that uses only the last assistant
+  turn's usage snapshot — not a cumulative sum — to avoid per-turn
+  cache_read over-counting.
+- **Menu-bar status dot** — an 8pt overlay on the menu-bar icon driven by
+  a priority stack: error (red) > warning (orange, context ≥ 95%) >
+  processing (blue, pulsing — reserved for v0.3) > active (green) >
+  inactive (gray) > hidden. Green is static, following Apple's convention
+  of reserving pulse for in-transition states only.
+
+### Changed
+- `JSONLParser.scanTokensOnly` removed; callers use the new
+  `scanTokensAndThinking` which returns tokens, thinking count, model, and
+  the last-turn usage snapshot in a single pass.
+- `Info.plist` bundle version bumped to `0.2.0` (build `2`).
 
 ### Notes
 - Opus 4.7 uses a new tokenizer — token counts may read 1.0~1.35× higher
-  than Opus 4.6 for the same work.
+  than Opus 4.6 for the same work. No action needed; mixed-model
+  comparisons may look inflated for Opus 4.7 sessions.
 
 ## [0.1.1] - 2026-04-18
 
@@ -54,6 +76,7 @@ Initial public release.
 - Self-contained `.app` bundle build via Swift Package Manager (no Xcode
   project, ~1.0 MB, arm64, ad-hoc signed).
 
-[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/anhyobin/mac-app-for-claude-code/releases/tag/v0.1.0
