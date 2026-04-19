@@ -164,15 +164,6 @@ enum JSONLParser {
         var truncated: Bool
     }
 
-    /// Extracts only token usage from a JSONL file — much faster than full scanSessionSummary.
-    ///
-    /// Kept as a legacy forwarder; no current callers as of v0.2. Retained so a
-    /// caller wanting *just* the token sum without the quick-stats struct has a
-    /// named API. Safe to delete once someone confirms no external references.
-    static func scanTokensOnly(at path: URL) -> TokenUsage {
-        scanTokensAndThinking(at: path).tokens
-    }
-
     /// Extracts cumulative tokens, thinking-block count, model name, and the
     /// last assistant turn's usage snapshot in a single pass. Used by
     /// ``ClaudeDataStore`` to populate ``SessionExpandedData`` for active

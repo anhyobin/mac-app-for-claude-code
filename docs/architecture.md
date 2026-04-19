@@ -103,7 +103,7 @@ MenuBarContentView
 ### 세션 상세 로딩 (Lazy)
 
 1. 사용자가 세션 행을 클릭하여 확장하면 `loadSessionDetail()` 호출
-2. `Task.detached`에서 `SubagentLoader`, `TaskLoader`, `JSONLParser.scanTokensOnly()` 병렬 수행
+2. `Task.detached`에서 `SubagentLoader`, `TaskLoader`, `JSONLParser.scanTokensAndThinking()` 병렬 수행
 3. 결과를 `expandedSessionData[sessionId]`에 캐싱
 4. 활성 세션은 5초마다 자동 리프레시 (`refreshExpandedActiveSessions`)
 

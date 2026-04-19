@@ -46,7 +46,7 @@ struct MenuBarContentView: View {
 
                 // Footer
                 HStack {
-                    Text("v0.1.0")
+                    Text("v0.2.0")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                     Spacer()

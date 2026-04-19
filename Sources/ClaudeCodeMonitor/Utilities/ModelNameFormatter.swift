@@ -40,6 +40,7 @@ enum ModelNameFormatter {
         ("sonnet-4-6", "Sonnet 4.6"),
         ("sonnet-4-5", "Sonnet 4.5"),
         ("sonnet-3-5", "Sonnet 3.5"),
+        ("haiku-4-6", "Haiku 4.6"),
         ("haiku-4-5", "Haiku 4.5"),
         ("haiku-3-5", "Haiku 3.5"),
     ]
