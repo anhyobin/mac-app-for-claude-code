@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   use (e.g. "Opus 4.7") with a family accent color — Opus=orange,
   Sonnet=blue, Haiku=green. Active sessions previously showed no model at
   all; recent sessions showed only a plain text name.
-- **Opus / Sonnet / Haiku 4.7** recognition in `ModelNameFormatter`, with
-  the 4.7 generation matched before 4.6 to avoid prefix shadowing. Also
-  filled in the missing `haiku-4-6` entry for family matrix completeness.
+- **Opus 4.7** recognition in `ModelNameFormatter`. Sonnet and Haiku 4.7
+  patterns are pre-registered for when those models ship; today only Opus
+  4.7 is released. The 4.7 generation is matched before 4.6 to avoid
+  prefix shadowing. Also filled in the missing `haiku-4-6` entry for
+  family matrix completeness.
 - **Extended-thinking block counter** (`🧠 N`) on every session row, parsed
   from `content[].type == "thinking"` blocks in the session JSONL. Hidden
   when zero so rows without thinking stay uncluttered. Expanded detail view
@@ -26,10 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   active session row showing `lastTurn usage / model max`. Secondary below
   80%, orange at 80–94%, red at 95%+. Expanded detail view adds a
   tabular-num readout like `312K / 1M (31%)`. Backed by a new
-  `ModelContextLimits` table (1M for Opus/Sonnet 4.7, 200K for earlier
-  generations) and a `contextUsageRatio` that uses only the last assistant
-  turn's usage snapshot — not a cumulative sum — to avoid per-turn
-  cache_read over-counting.
+  `ModelContextLimits` table (1M for 4.7-generation models, 200K for
+  earlier generations) and a `contextUsageRatio` that uses only the last
+  assistant turn's usage snapshot — not a cumulative sum — to avoid
+  per-turn cache_read over-counting.
 - **Menu-bar status dot** — an 8pt overlay on the menu-bar icon driven by
   a priority stack: error (red) > warning (orange, context ≥ 95%) >
   processing (blue, pulsing — reserved for v0.3) > active (green) >
