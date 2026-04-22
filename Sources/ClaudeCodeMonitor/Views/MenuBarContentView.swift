@@ -46,7 +46,7 @@ struct MenuBarContentView: View {
 
                 // Footer
                 HStack {
-                    Text("v0.2.0")
+                    Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0")")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                     Spacer()
