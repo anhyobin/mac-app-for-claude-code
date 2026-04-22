@@ -25,7 +25,8 @@ final class ContextUsageRatioTests: XCTestCase {
             mainThinkingBlockCount: 0,
             mainModel: model,
             mainLastTurnUsage: lastTurn,
-            mainTruncated: false
+            mainTruncated: false,
+            mainSkillCounts: [:]
         )
     }
 

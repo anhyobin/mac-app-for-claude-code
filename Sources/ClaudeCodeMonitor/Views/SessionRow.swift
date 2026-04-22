@@ -53,10 +53,13 @@ struct SessionRow: View {
                             .clipShape(Capsule())
                     }
 
-                    // Thinking-block counter (hidden when zero so rows without
-                    // extended thinking stay uncluttered).
+                    // Thinking-block + Skill counters (hidden when zero so rows
+                    // without extended thinking / skill usage stay uncluttered).
+                    // Skill count aggregates main + all subagents via
+                    // totalSkillCounts so subagent skill calls remain visible.
                     if let expanded = dataStore.expandedSessionData[session.id] {
                         ThinkingCounter(count: expanded.mainThinkingBlockCount)
+                        SkillCounter(count: expanded.totalSkillCounts.values.reduce(0, +))
                     }
 
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")

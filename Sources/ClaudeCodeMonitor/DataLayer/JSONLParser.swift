@@ -18,6 +18,7 @@ enum JSONLParser {
         var assistantMessageCount = 0
         var tokens = TokenUsage()
         var toolCounts: [String: Int] = [:]
+        var skillCounts: [String: Int] = [:]
         var thinkingBlockCount = 0
 
         let isoFormatter = ISO8601DateFormatter()
@@ -86,13 +87,21 @@ enum JSONLParser {
                     ))
                 }
 
-                // Extract tool_use counts and thinking blocks in a single pass.
+                // Extract tool_use counts, Skill sub-tallies, and thinking
+                // blocks in a single pass. When a tool_use names the "Skill"
+                // tool, also tally by `input.skill` so the UI can surface
+                // per-skill invocation counts.
                 if let content = message["content"] as? [[String: Any]] {
                     for block in content {
                         switch block["type"] as? String {
                         case "tool_use":
                             if let name = block["name"] as? String {
                                 toolCounts[name, default: 0] += 1
+                                if name == "Skill",
+                                   let input = block["input"] as? [String: Any],
+                                   let skill = input["skill"] as? String {
+                                    skillCounts[skill, default: 0] += 1
+                                }
                             }
                         case "thinking":
                             thinkingBlockCount += 1
@@ -127,7 +136,8 @@ enum JSONLParser {
             toolCounts: toolCounts,
             model: model,
             slug: slug,
-            thinkingBlockCount: thinkingBlockCount
+            thinkingBlockCount: thinkingBlockCount,
+            skillCounts: skillCounts
         )
     }
 
@@ -162,6 +172,10 @@ enum JSONLParser {
         /// True when the source JSONL exceeded the max file size and was not
         /// parsed. Views should render an "unknown" state rather than "empty".
         var truncated: Bool
+        /// Count of Skill tool invocations in this session keyed by skill
+        /// name (plugin namespace preserved). Empty when the session has
+        /// no Skill tool_use blocks or when parsing was skipped.
+        var skillCounts: [String: Int]
     }
 
     /// Extracts cumulative tokens, thinking-block count, model name, and the
@@ -177,7 +191,8 @@ enum JSONLParser {
                 thinkingBlockCount: 0,
                 model: nil,
                 lastTurnUsage: nil,
-                truncated: true
+                truncated: true,
+                skillCounts: [:]
             )
         }
 
@@ -186,6 +201,7 @@ enum JSONLParser {
         var thinkingBlockCount = 0
         var model: String?
         var lastTurnUsage: TokenUsage?
+        var skillCounts: [String: Int] = [:]
 
         for lineData in lines {
             let lineStr = String(decoding: lineData, as: UTF8.self)
@@ -212,8 +228,21 @@ enum JSONLParser {
             }
 
             if let content = message["content"] as? [[String: Any]] {
-                for block in content where block["type"] as? String == "thinking" {
-                    thinkingBlockCount += 1
+                for block in content {
+                    switch block["type"] as? String {
+                    case "tool_use":
+                        // Only tally Skill invocations here — other tool counts
+                        // are not needed for the active-session fast path.
+                        if block["name"] as? String == "Skill",
+                           let input = block["input"] as? [String: Any],
+                           let skill = input["skill"] as? String {
+                            skillCounts[skill, default: 0] += 1
+                        }
+                    case "thinking":
+                        thinkingBlockCount += 1
+                    default:
+                        break
+                    }
                 }
             }
         }
@@ -223,7 +252,8 @@ enum JSONLParser {
             thinkingBlockCount: thinkingBlockCount,
             model: model,
             lastTurnUsage: lastTurnUsage,
-            truncated: false
+            truncated: false,
+            skillCounts: skillCounts
         )
     }
 

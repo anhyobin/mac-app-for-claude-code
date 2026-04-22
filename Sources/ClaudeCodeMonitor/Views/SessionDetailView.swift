@@ -65,6 +65,22 @@ struct SessionDetailView: View {
                 .foregroundStyle(.secondary)
             }
 
+            // Skills summary. Uses totalSkillCounts (main + all agents,
+            // including completed ones) so the session-level tally stays
+            // visible even after subagents drop off the active list.
+            if !data.totalSkillCounts.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "puzzlepiece.extension")
+                        .font(.caption2)
+                    Text("Skills: \(skillsSummary)")
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundStyle(.secondary)
+            }
+
             // Active agents section
             if !activeAgents.isEmpty {
                 HStack(spacing: 4) {
@@ -189,6 +205,31 @@ struct SessionDetailView: View {
         .padding(.vertical, 4)
         .animation(.easeInOut(duration: 0.15), value: showCompletedAgents)
         .animation(.easeInOut(duration: 0.15), value: showAllCompleted)
+    }
+
+    /// One-line Skills summary. Entries are sorted by count DESC then name
+    /// ASC, rendered as `name` when count==1 and `name(n)` when count>1,
+    /// joined by ` · `. If there are more than 4 entries, the top 4 are
+    /// shown followed by ` · +N more`. Plugin namespaces are preserved.
+    private var skillsSummary: String {
+        let sorted = data.totalSkillCounts.sorted { lhs, rhs in
+            if lhs.value != rhs.value { return lhs.value > rhs.value }
+            return lhs.key < rhs.key
+        }
+
+        let maxShown = 4
+        let shown = sorted.prefix(maxShown)
+        let overflow = sorted.count - shown.count
+
+        let parts = shown.map { name, count in
+            count > 1 ? "\(name)(\(count))" : name
+        }
+
+        var summary = parts.joined(separator: " · ")
+        if overflow > 0 {
+            summary += " · +\(overflow) more"
+        }
+        return summary
     }
 
     /// Compact summary of completed agent types, e.g. "3 dev, 2 qa, 1 review"

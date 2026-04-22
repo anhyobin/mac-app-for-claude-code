@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-22
+
+### Added
+- **Skill tool usage visualization** — extracts per-skill invocation counts
+  from both the main session JSONL and every subagent JSONL, keyed by the
+  full skill name (plugin namespaces like `oh-my-claudecode:hud` preserved).
+  Surfaced in two places:
+  - **Session detail** (expanded view): a one-line `🧩 Skills:` summary
+    below the thinking-block row, sorted by count DESC / name ASC. Shows
+    top 4 entries joined by ` · `; overflow is `+N more`. Bound to
+    `totalSkillCounts` (main + all subagents, active and completed) so
+    skill calls remain visible after subagents drop off the active list.
+  - **Agent detail** (expanded agent row): a purple-tinted chip section
+    using `FlowLayout`, placed between the existing Tools and Files
+    sections. Count shown only when > 1.
+- **Skill counter badge** (`🧩 N`) on collapsed active-session and
+  recent-session rows, matching the existing thinking-counter (`🧠 N`)
+  pattern. Hidden when zero. Active rows use the session-wide total
+  (main + subagents); recent rows use main-session counts only (subagent
+  data is not loaded for recent sessions).
+
 ## [0.2.0] - 2026-04-20
 
 ### Added
@@ -78,7 +99,8 @@ Initial public release.
 - Self-contained `.app` bundle build via Swift Package Manager (no Xcode
   project, ~1.0 MB, arm64, ad-hoc signed).
 
-[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/anhyobin/mac-app-for-claude-code/releases/tag/v0.1.0

@@ -29,6 +29,27 @@ struct SessionExpandedData: Sendable {
     /// True when the source JSONL was larger than the parser's size cap and
     /// could not be read. Views should render "unknown" rather than "empty".
     let mainTruncated: Bool
+    /// Count of Skill tool invocations in the main session JSONL only,
+    /// keyed by the invoked skill name (namespace preserved).
+    ///
+    /// This is the "main session" slice — subagent skill calls are tracked
+    /// separately on each ``SubagentInfo`` and aggregated into
+    /// ``totalSkillCounts``.
+    let mainSkillCounts: [String: Int]
+
+    /// Session-wide Skill invocation totals = main + every subagent (active
+    /// AND completed). The view layer binds to this so that skill calls
+    /// made by subagents remain visible after the agents drop off the
+    /// active list.
+    var totalSkillCounts: [String: Int] {
+        var totals = mainSkillCounts
+        for agent in agents {
+            for (skill, count) in agent.skillCounts {
+                totals[skill, default: 0] += count
+            }
+        }
+        return totals
+    }
 
     /// Ratio (0.0–1.0+) of how full the context window is for the given model.
     ///

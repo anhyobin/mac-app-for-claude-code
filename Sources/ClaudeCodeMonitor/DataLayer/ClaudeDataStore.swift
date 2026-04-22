@@ -263,6 +263,7 @@ final class ClaudeDataStore {
         let previousModel = expandedSessionData[sessionId]?.mainModel
         let previousLastTurn = expandedSessionData[sessionId]?.mainLastTurnUsage
         let previousTruncated = expandedSessionData[sessionId]?.mainTruncated ?? false
+        let previousMainSkillCounts = expandedSessionData[sessionId]?.mainSkillCounts
 
         let result = await Task.detached {
             let agents = SubagentLoader.loadAgents(
@@ -292,16 +293,19 @@ final class ClaudeDataStore {
             let mainModel: String?
             let mainLastTurnUsage: TokenUsage?
             let mainTruncated: Bool
+            let mainSkillCounts: [String: Int]
             if let prevMtime = previousMtime,
                let curMtime = currentMtime,
                prevMtime == curMtime,
                let cachedTokens = previousMainTokens,
-               let cachedThinking = previousThinking {
+               let cachedThinking = previousThinking,
+               let cachedSkills = previousMainSkillCounts {
                 mainTokens = cachedTokens
                 mainThinkingBlockCount = cachedThinking
                 mainModel = previousModel
                 mainLastTurnUsage = previousLastTurn
                 mainTruncated = previousTruncated
+                mainSkillCounts = cachedSkills
             } else {
                 let stats = JSONLParser.scanTokensAndThinking(at: mainJSONLPath)
                 mainTokens = stats.tokens
@@ -309,6 +313,7 @@ final class ClaudeDataStore {
                 mainModel = stats.model
                 mainLastTurnUsage = stats.lastTurnUsage
                 mainTruncated = stats.truncated
+                mainSkillCounts = stats.skillCounts
             }
 
             // Total = main session tokens + all subagent tokens
@@ -326,7 +331,8 @@ final class ClaudeDataStore {
                 mainThinkingBlockCount: mainThinkingBlockCount,
                 mainModel: mainModel,
                 mainLastTurnUsage: mainLastTurnUsage,
-                mainTruncated: mainTruncated
+                mainTruncated: mainTruncated,
+                mainSkillCounts: mainSkillCounts
             )
         }.value
 
@@ -337,9 +343,11 @@ final class ClaudeDataStore {
         let key = "\(sessionId)/\(agentHash)"
         if !forceRefresh, agentDetailData[key] != nil { return }
 
-        // Get full tool breakdown from already-loaded SubagentInfo
+        // Get full tool & skill breakdowns from already-loaded SubagentInfo
         let cachedBreakdown = expandedSessionData[sessionId]?
             .agents.first { $0.id == agentHash }?.toolBreakdown ?? [:]
+        let cachedSkills = expandedSessionData[sessionId]?
+            .agents.first { $0.id == agentHash }?.skillCounts ?? [:]
 
         let encodedPath = PathDecoder.encodedProjectPath(from: projectPath)
         let projectsDir = FileManager.default.homeDirectoryForCurrentUser
@@ -358,7 +366,8 @@ final class ClaudeDataStore {
             return AgentDetailData(
                 recentMessages: messages,
                 fileChanges: fileChanges,
-                toolBreakdown: cachedBreakdown
+                toolBreakdown: cachedBreakdown,
+                skillBreakdown: cachedSkills
             )
         }.value
 

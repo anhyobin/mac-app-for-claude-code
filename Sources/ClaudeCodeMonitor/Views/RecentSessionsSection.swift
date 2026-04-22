@@ -67,6 +67,7 @@ private struct RecentSessionRow: View {
                         TokenBadge(count: session.tokens.coreTokens)
                     }
                     ThinkingCounter(count: session.thinkingBlockCount)
+                    SkillCounter(count: session.skillCounts.values.reduce(0, +))
                 }
             }
         }

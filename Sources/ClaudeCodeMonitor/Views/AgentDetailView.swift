@@ -29,6 +29,34 @@ struct AgentDetailView: View {
                 }
             }
 
+            // Skills Breakdown — per-subagent skill invocations. Purple
+            // tint (muted) distinguishes skills from generic tools; count
+            // is only rendered when > 1 so singletons stay visually quiet.
+            if !data.skillBreakdown.isEmpty {
+                Text("Skills")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 4) {
+                    ForEach(sortedSkills, id: \.key) { skill, count in
+                        HStack(spacing: 2) {
+                            Text(skill)
+                                .font(.caption2)
+                            if count > 1 {
+                                Text("\(count)")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.purple.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+                }
+            }
+
             // Files Modified
             if !data.fileChanges.isEmpty {
                 Text("Files (\(data.fileChanges.count))")
@@ -97,7 +125,7 @@ struct AgentDetailView: View {
                 }
             }
 
-            if data.recentMessages.isEmpty && data.fileChanges.isEmpty && data.toolBreakdown.isEmpty {
+            if data.recentMessages.isEmpty && data.fileChanges.isEmpty && data.toolBreakdown.isEmpty && data.skillBreakdown.isEmpty {
                 Text("No activity data")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -108,6 +136,10 @@ struct AgentDetailView: View {
 
     private var sortedTools: [(key: String, value: Int)] {
         data.toolBreakdown.sorted { $0.value > $1.value }
+    }
+
+    private var sortedSkills: [(key: String, value: Int)] {
+        data.skillBreakdown.sorted { $0.value > $1.value }
     }
 
     private func shortPath(_ path: String) -> String {

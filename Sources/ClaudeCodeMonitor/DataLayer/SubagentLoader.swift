@@ -67,7 +67,7 @@ enum SubagentLoader {
             }
 
             // Parse JSONL for tokens and tool counts
-            let (tokens, toolUseCount, messageCount, toolBreakdown) = scanAgentJSONL(at: jsonlPath)
+            let (tokens, toolUseCount, messageCount, toolBreakdown, skillCounts) = scanAgentJSONL(at: jsonlPath)
 
             agents.append(SubagentInfo(
                 id: hash,
@@ -77,6 +77,7 @@ enum SubagentLoader {
                 toolUseCount: toolUseCount,
                 messageCount: messageCount,
                 toolBreakdown: toolBreakdown,
+                skillCounts: skillCounts,
                 lastActivity: mtime
             ))
         }
@@ -92,16 +93,16 @@ enum SubagentLoader {
         return agents
     }
 
-    private static func scanAgentJSONL(at path: URL) -> (TokenUsage, Int, Int, [String: Int]) {
+    private static func scanAgentJSONL(at path: URL) -> (TokenUsage, Int, Int, [String: Int], [String: Int]) {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path.path),
               let fileSize = attrs[.size] as? UInt64,
               fileSize <= 50 * 1024 * 1024 else {
-            return (TokenUsage(), 0, 0, [:])
+            return (TokenUsage(), 0, 0, [:], [:])
         }
 
         guard let data = try? Data(contentsOf: path) else {
             print("[SubagentLoader] Failed to read: \(path.lastPathComponent)")
-            return (TokenUsage(), 0, 0, [:])
+            return (TokenUsage(), 0, 0, [:], [:])
         }
 
         let lines = data.split(separator: UInt8(ascii: "\n"))
@@ -109,6 +110,7 @@ enum SubagentLoader {
         var toolUseCount = 0
         var messageCount = 0
         var toolBreakdown: [String: Int] = [:]
+        var skillCounts: [String: Int] = [:]
 
         for lineData in lines {
             let lineStr = String(decoding: lineData, as: UTF8.self)
@@ -133,11 +135,16 @@ enum SubagentLoader {
                     toolUseCount += 1
                     if let name = block["name"] as? String {
                         toolBreakdown[name, default: 0] += 1
+                        if name == "Skill",
+                           let input = block["input"] as? [String: Any],
+                           let skill = input["skill"] as? String {
+                            skillCounts[skill, default: 0] += 1
+                        }
                     }
                 }
             }
         }
 
-        return (tokens, toolUseCount, messageCount, toolBreakdown)
+        return (tokens, toolUseCount, messageCount, toolBreakdown, skillCounts)
     }
 }
