@@ -47,17 +47,24 @@ enum ModelNameFormatter {
 
     static func displayName(from rawModel: String) -> String {
         let lower = rawModel.lowercased()
+        // Cross-reference with ~/.claude/settings.json — JSONL never contains [1m].
+        let is1MVariant = ClaudeSettingsReader.isOneMillionContext(for: rawModel)
 
         for entry in knownModels {
             if lower.contains(entry.pattern) {
+                // Append "(1M)" for explicit 1M variants that aren't already 1M by default
+                if is1MVariant && !entry.pattern.contains("4-7") {
+                    return "\(entry.display) (1M)"
+                }
                 return entry.display
             }
         }
 
         // Fallback for unrecognized patterns
-        if lower.contains("opus") { return "Opus" }
-        if lower.contains("sonnet") { return "Sonnet" }
-        if lower.contains("haiku") { return "Haiku" }
+        let suffix = is1MVariant ? " (1M)" : ""
+        if lower.contains("opus") { return "Opus\(suffix)" }
+        if lower.contains("sonnet") { return "Sonnet\(suffix)" }
+        if lower.contains("haiku") { return "Haiku\(suffix)" }
 
         return rawModel
     }

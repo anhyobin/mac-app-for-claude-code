@@ -89,6 +89,8 @@ MenuBarContentView
 | `TokenFormatter` | 토큰 수를 K/M 단위로 포맷 (예: `1234` -> `1.2K`) |
 | `RelativeTimeFormatter` | 경과 시간을 사람이 읽기 쉬운 형태로 포맷 (예: `3h 42m`) |
 | `ModelNameFormatter` | Claude 모델 전체 이름을 축약형으로 변환 (예: `Opus 4.6`) |
+| `ModelContextLimits` | 모델별 최대 컨텍스트 윈도우 크기 반환 (200K/1M) |
+| `ClaudeSettingsReader` | `~/.claude/settings.json` 읽어 1M context 변형 감지 (앱 시작 시 1회 캐시) |
 | `PathDecoder` | 프로젝트 경로에서 이름 추출 및 Claude CLI 경로 인코딩 규칙 적용 |
 
 ## 데이터 흐름

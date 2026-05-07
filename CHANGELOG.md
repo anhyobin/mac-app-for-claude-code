@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-07
+
+### Fixed
+- **Context gauge 1M detection** — models configured as 1M-context variants
+  (e.g., `us.anthropic.claude-opus-4-6-v1[1m]`) were incorrectly shown with a
+  200K limit because the JSONL API response only contains short model IDs
+  (`claude-opus-4-6`) without the `[1m]` suffix. The fix cross-references
+  `~/.claude/settings.json` env vars (`ANTHROPIC_MODEL`, etc.) to detect the
+  `[1m]` suffix and correctly report a 1M context window.
+
+### Added
+- **`ClaudeSettingsReader`** utility — reads `~/.claude/settings.json` once at
+  app launch to determine model context-window configuration. Cached per session.
+- **"(1M)" badge suffix** on model badges for non-4.7 models running with 1M
+  context (e.g., "Opus 4.6 (1M)"), so users can confirm their variant at a
+  glance.
+
 ## [0.3.0] - 2026-04-22
 
 ### Added
