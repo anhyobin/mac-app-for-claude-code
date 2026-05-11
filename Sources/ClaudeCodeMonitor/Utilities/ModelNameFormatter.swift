@@ -52,8 +52,9 @@ enum ModelNameFormatter {
 
         for entry in knownModels {
             if lower.contains(entry.pattern) {
-                // Append "(1M)" for explicit 1M variants that aren't already 1M by default
-                if is1MVariant && !entry.pattern.contains("4-7") {
+                // Append "(1M)" when settings.json maps this model to a [1m]
+                // variant. 4.7 follows the same rule as 4.6 — no special case.
+                if is1MVariant {
                     return "\(entry.display) (1M)"
                 }
                 return entry.display

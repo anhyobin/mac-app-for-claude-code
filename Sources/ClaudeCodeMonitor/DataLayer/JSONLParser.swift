@@ -68,8 +68,11 @@ enum JSONLParser {
                 assistantMessageCount += 1
                 guard let message = entry["message"] as? [String: Any] else { continue }
 
-                // Extract model
-                if model == nil, let m = message["model"] as? String {
+                // Extract model — overwrite on every assistant turn so the
+                // final value reflects the most recent model, catching mid-
+                // session `/model` swaps. Mirrors the last-turn rule used by
+                // `mainLastTurnUsage`.
+                if let m = message["model"] as? String {
                     model = m
                 }
 
@@ -162,7 +165,8 @@ enum JSONLParser {
     struct SessionQuickStats: Sendable {
         var tokens: TokenUsage
         var thinkingBlockCount: Int
-        /// Raw model string from the first assistant message that reports one.
+        /// Raw model string from the most recent assistant message that
+        /// reports one. Captures mid-session `/model` swaps.
         /// `nil` when the session has no assistant messages yet.
         var model: String?
         /// Snapshot of the usage block on the most recent assistant turn.
@@ -210,7 +214,7 @@ enum JSONLParser {
             guard let entry = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                   let message = entry["message"] as? [String: Any] else { continue }
 
-            if model == nil, let m = message["model"] as? String {
+            if let m = message["model"] as? String {
                 model = m
             }
 

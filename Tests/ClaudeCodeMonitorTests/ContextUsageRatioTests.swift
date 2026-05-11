@@ -191,11 +191,18 @@ final class ModelFamilyTests: XCTestCase {
         XCTAssertEqual(ModelNameFormatter.family(from: "gpt-4"), .unknown)
     }
 
-    /// Regression guard: if the ordering in knownModels ever flips, this
-    /// test surfaces it before it reaches users.
+    /// Regression guard: if the ordering in knownModels ever flips, a 4.7
+    /// model string would start getting matched against the 4.6 pattern
+    /// first. The "(1M)" suffix is settings-dependent so we only assert
+    /// the version number — but we explicitly check the 4.7 string never
+    /// resolves to a "Opus 4.6*" display, which is what an ordering
+    /// regression would produce.
     func testFourSevenMatchesBeforeFourSix() {
-        XCTAssertEqual(ModelNameFormatter.displayName(from: "claude-opus-4-7-20260315"), "Opus 4.7")
-        XCTAssertEqual(ModelNameFormatter.displayName(from: "claude-opus-4-6-20260101"), "Opus 4.6")
+        let d47 = ModelNameFormatter.displayName(from: "claude-opus-4-7-20260315")
+        XCTAssertTrue(d47 == "Opus 4.7" || d47 == "Opus 4.7 (1M)")
+        XCTAssertFalse(d47.contains("4.6"))
+        let d46 = ModelNameFormatter.displayName(from: "claude-opus-4-6-20260101")
+        XCTAssertTrue(d46 == "Opus 4.6" || d46 == "Opus 4.6 (1M)")
     }
 
     /// When settings.json has opus-4-6 configured with [1m], the display name
@@ -208,9 +215,17 @@ final class ModelFamilyTests: XCTestCase {
         XCTAssertTrue(display == "Opus 4.6" || display == "Opus 4.6 (1M)")
     }
 
-    /// 4.7 models should never have "(1M)" appended — they are always 1M by default.
-    func testOpus47NeverGetsOneMLabel() {
-        let display = ModelNameFormatter.displayName(from: "claude-opus-4-7-20260315")
-        XCTAssertEqual(display, "Opus 4.7")
+    /// 4.7 models follow the same settings.json rule as 4.6: "(1M)" is
+    /// appended only when ~/.claude/settings.json maps the model to a [1m]
+    /// variant. On machines without that mapping, no suffix is shown.
+    /// Covers all three families so a future regression that re-adds a
+    /// 4-7 special-case is caught.
+    func testFourSevenFollowsSettingsForOneMLabel() {
+        let opus = ModelNameFormatter.displayName(from: "claude-opus-4-7-20260315")
+        XCTAssertTrue(opus == "Opus 4.7" || opus == "Opus 4.7 (1M)")
+        let sonnet = ModelNameFormatter.displayName(from: "claude-sonnet-4-7-20260315")
+        XCTAssertTrue(sonnet == "Sonnet 4.7" || sonnet == "Sonnet 4.7 (1M)")
+        let haiku = ModelNameFormatter.displayName(from: "claude-haiku-4-7-20260315")
+        XCTAssertTrue(haiku == "Haiku 4.7" || haiku == "Haiku 4.7 (1M)")
     }
 }

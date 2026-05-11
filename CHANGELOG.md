@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-05-11
+
+### Fixed
+- **Mid-session `/model` swaps now reflected in the UI.** The JSONL parser
+  previously captured the `model` field from only the *first* assistant
+  message in a session, so switching models with `/model` mid-session (e.g.
+  Opus → Sonnet) left the session row, model badge, context gauge, and
+  menu-bar dot warning threshold stuck on the original model. Both the
+  full-summary and fast-path parsers now overwrite `model` on every
+  assistant turn, matching the existing last-turn rule used by
+  `mainLastTurnUsage`. Context-window ratio and limit are now evaluated
+  against the model that actually served the last turn.
+
+### Changed
+- **`(1M)` label rule extended to the 4.7 generation.** Previously 4.7
+  models suppressed the `(1M)` suffix on the assumption that 1M was
+  implicit for that generation. That was incorrect — 4.7 goes through the
+  same `ANTHROPIC_*MODEL` env-var `[1m]` mapping as 4.6. The special-case
+  has been removed, so `claude-opus-4-7` (and sonnet/haiku 4.7) now
+  display `Opus 4.7 (1M)` when `~/.claude/settings.json` maps the model
+  with a `[1m]` suffix, and `Opus 4.7` otherwise. Same rule as 4.6, no
+  generation-specific exceptions.
+
 ## [0.3.1] - 2026-05-07
 
 ### Fixed

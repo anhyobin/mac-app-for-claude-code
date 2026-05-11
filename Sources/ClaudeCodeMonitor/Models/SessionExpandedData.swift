@@ -14,9 +14,10 @@ struct SessionExpandedData: Sendable {
     let mainThinkingBlockCount: Int
     /// Raw model string for the main session (e.g. `claude-opus-4-7-20260315`).
     ///
-    /// Pulled from the first assistant message's `model` field. `nil` when the
-    /// session has no assistant turns yet, in which case context-window gauges
-    /// and model badges should be hidden.
+    /// Pulled from the most recent assistant message's `model` field, so
+    /// mid-session `/model` swaps are reflected. `nil` when the session has
+    /// no assistant turns yet, in which case context-window gauges and model
+    /// badges should be hidden.
     let mainModel: String?
     /// Usage snapshot from the most recent assistant turn in the main session.
     ///
