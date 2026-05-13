@@ -41,6 +41,7 @@ Claude Code Monitor lives in your macOS menu bar and gives you a bird's-eye view
 - **Task Board** — Per-session and per-agent task lists with status tracking (pending / in progress / completed)
 - **Agent Details** — Drill into any agent to see recent messages, modified files, and tool usage breakdown
 - **Session History** — Browse completed sessions with model name, duration, and token summary
+- **Goal Tracking** — Monitor active `/goal` sessions in real time; see condition, elapsed time, and turns taken
 
 ## Quick Start
 
@@ -59,7 +60,7 @@ bash scripts/build-app.sh
 open ClaudeCodeMonitor.app
 ```
 
-The build produces a self-contained `ClaudeCodeMonitor.app` bundle (~1.0 MB) in the project root. No Xcode project required — just Swift Package Manager.
+The build produces a self-contained `ClaudeCodeMonitor.app` bundle (~1.3 MB) in the project root. No Xcode project required — just Swift Package Manager.
 
 ### Distribution
 
@@ -93,7 +94,7 @@ zip -r ClaudeCodeMonitor.zip ClaudeCodeMonitor.app
 
 1. **FSEvents** watches `~/.claude/sessions/` for any file-system changes
 2. **SessionFileReader** discovers active sessions by reading `session.json` files and validating process IDs
-3. **JSONLParser** streams conversation JSONL files to extract token counts, messages, and file changes
+3. **JSONLParser** streams conversation JSONL files to extract token counts, messages, file changes, and `/goal` state
 4. **SubagentLoader** and **TaskLoader** parse subagent metadata and task state
 5. **ClaudeDataStore** (`@Observable`) aggregates everything into a single reactive data model
 6. **SwiftUI MenuBarExtra** renders the popover UI, updating automatically when data changes
@@ -103,9 +104,9 @@ zip -r ClaudeCodeMonitor.zip ClaudeCodeMonitor.app
 ```
 Sources/ClaudeCodeMonitor/
 ├── App/                  # App entry point, MenuBarExtra configuration
-├── Models/               # Data types: sessions, agents, tokens, tasks, conversations
+├── Models/               # Data types: sessions, agents, tokens, tasks, conversations, goals
 ├── DataLayer/            # Core logic: file reading, JSONL parsing, FSEvents watcher
-├── Views/                # SwiftUI views: session list, agent details, token badges
+├── Views/                # SwiftUI views: session list, agent details, token badges, goal banner
 ├── Utilities/            # Formatters: token counts (1.2K), relative time (3h 42m), model names
 └── Resources/            # App icon and menu bar icons
 ```
@@ -126,7 +127,7 @@ Sources/ClaudeCodeMonitor/
 | **Build** | Swift Package Manager (no Xcode project) |
 | **File Watching** | FSEvents via CoreServices |
 | **Dependencies** | None — pure Apple frameworks |
-| **Binary Size** | ~1.0 MB |
+| **Binary Size** | ~1.3 MB |
 
 ## Contributing
 

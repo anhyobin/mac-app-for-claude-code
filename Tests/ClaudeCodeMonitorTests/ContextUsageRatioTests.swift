@@ -26,7 +26,8 @@ final class ContextUsageRatioTests: XCTestCase {
             mainModel: model,
             mainLastTurnUsage: lastTurn,
             mainTruncated: false,
-            mainSkillCounts: [:]
+            mainSkillCounts: [:],
+            activeGoal: nil
         )
     }
 

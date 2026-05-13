@@ -180,6 +180,12 @@ enum JSONLParser {
         /// name (plugin namespace preserved). Empty when the session has
         /// no Skill tool_use blocks or when parsing was skipped.
         var skillCounts: [String: Int]
+        /// Most recent `/goal` status for this session. `nil` when the
+        /// session has never had a goal installed, when the parse was
+        /// truncated (>50MB cap), or when the file couldn't be read.
+        /// The parser tracks only the latest start marker — if a session
+        /// achieved goal A and then started goal B, only B is reported.
+        var activeGoal: GoalStatus?
     }
 
     /// Extracts cumulative tokens, thinking-block count, model name, and the
@@ -196,7 +202,8 @@ enum JSONLParser {
                 model: nil,
                 lastTurnUsage: nil,
                 truncated: true,
-                skillCounts: [:]
+                skillCounts: [:],
+                activeGoal: nil
             )
         }
 
@@ -207,49 +214,128 @@ enum JSONLParser {
         var lastTurnUsage: TokenUsage?
         var skillCounts: [String: Int] = [:]
 
+        // Goal tracking state. We walk the file top-to-bottom; each time we
+        // see a start marker (met:false, sentinel:true) we RESET the tracker
+        // so the reported goal is always the most-recent one. `startIndex`
+        // records the assistant-message count at the moment the start marker
+        // was seen; subtracting that from the final count yields
+        // `turnsElapsed`. `achievedAt` is stamped when a met:true shows up
+        // AFTER the latest start marker — achievements for earlier goals are
+        // ignored because the tracker was reset when the new start landed.
+        var goalCondition: String?
+        var goalStartedAt: Date?
+        var goalStartIndexAssistant: Int = 0
+        var goalAchievedAt: Date?
+        var goalAchievedIndexAssistant: Int?
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoFormatterNoFrac = ISO8601DateFormatter()
+        isoFormatterNoFrac.formatOptions = [.withInternetDateTime]
+
+        func parseDate(_ raw: String) -> Date? {
+            isoFormatter.date(from: raw) ?? isoFormatterNoFrac.date(from: raw)
+        }
+
+        var assistantCount = 0
+
         for lineData in lines {
             let lineStr = String(decoding: lineData, as: UTF8.self)
-            guard lineStr.contains("\"type\":\"assistant\"") else { continue }
+            let isAssistant = lineStr.contains("\"type\":\"assistant\"")
+            // `goal_status` events ride on attachment lines. Cheap string
+            // guard keeps JSON decoding off the hot path for unrelated rows.
+            let isAttachmentCandidate = !isAssistant
+                && lineStr.contains("\"type\":\"attachment\"")
+                && lineStr.contains("\"goal_status\"")
+            guard isAssistant || isAttachmentCandidate else { continue }
 
-            guard let entry = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let message = entry["message"] as? [String: Any] else { continue }
-
-            if let m = message["model"] as? String {
-                model = m
+            guard let entry = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                continue
             }
 
-            if let usage = message["usage"] as? [String: Any] {
-                let turn = TokenUsage(
-                    inputTokens: usage["input_tokens"] as? Int ?? 0,
-                    outputTokens: usage["output_tokens"] as? Int ?? 0,
-                    cacheReadTokens: usage["cache_read_input_tokens"] as? Int ?? 0,
-                    cacheWriteTokens: usage["cache_creation_input_tokens"] as? Int ?? 0
-                )
-                tokens.add(turn)
-                // Overwrite on every assistant turn so the final value is the
-                // most recent one — this is the point-in-time window snapshot.
-                lastTurnUsage = turn
-            }
+            if isAssistant {
+                assistantCount += 1
+                guard let message = entry["message"] as? [String: Any] else { continue }
 
-            if let content = message["content"] as? [[String: Any]] {
-                for block in content {
-                    switch block["type"] as? String {
-                    case "tool_use":
-                        // Only tally Skill invocations here — other tool counts
-                        // are not needed for the active-session fast path.
-                        if block["name"] as? String == "Skill",
-                           let input = block["input"] as? [String: Any],
-                           let skill = input["skill"] as? String {
-                            skillCounts[skill, default: 0] += 1
+                if let m = message["model"] as? String {
+                    model = m
+                }
+
+                if let usage = message["usage"] as? [String: Any] {
+                    let turn = TokenUsage(
+                        inputTokens: usage["input_tokens"] as? Int ?? 0,
+                        outputTokens: usage["output_tokens"] as? Int ?? 0,
+                        cacheReadTokens: usage["cache_read_input_tokens"] as? Int ?? 0,
+                        cacheWriteTokens: usage["cache_creation_input_tokens"] as? Int ?? 0
+                    )
+                    tokens.add(turn)
+                    // Overwrite on every assistant turn so the final value is the
+                    // most recent one — this is the point-in-time window snapshot.
+                    lastTurnUsage = turn
+                }
+
+                if let content = message["content"] as? [[String: Any]] {
+                    for block in content {
+                        switch block["type"] as? String {
+                        case "tool_use":
+                            // Only tally Skill invocations here — other tool counts
+                            // are not needed for the active-session fast path.
+                            if block["name"] as? String == "Skill",
+                               let input = block["input"] as? [String: Any],
+                               let skill = input["skill"] as? String {
+                                skillCounts[skill, default: 0] += 1
+                            }
+                        case "thinking":
+                            thinkingBlockCount += 1
+                        default:
+                            break
                         }
-                    case "thinking":
-                        thinkingBlockCount += 1
-                    default:
-                        break
                     }
+                }
+            } else {
+                // Attachment line carrying a goal_status event.
+                guard let attachment = entry["attachment"] as? [String: Any],
+                      attachment["type"] as? String == "goal_status" else { continue }
+
+                let met = attachment["met"] as? Bool ?? false
+                let sentinel = attachment["sentinel"] as? Bool ?? false
+                let tsRaw = entry["timestamp"] as? String
+
+                if !met && sentinel {
+                    // New goal installed. Reset any prior tracker so the
+                    // latest goal is the one we surface.
+                    goalCondition = attachment["condition"] as? String ?? ""
+                    goalStartedAt = tsRaw.flatMap(parseDate)
+                    goalStartIndexAssistant = assistantCount
+                    goalAchievedAt = nil
+                    goalAchievedIndexAssistant = nil
+                } else if met, goalStartedAt != nil, goalAchievedAt == nil {
+                    // Achievement applies to the most recent start marker.
+                    // Ignore `met:true` that appears before any start — it
+                    // would be orphan data and shouldn't be surfaced.
+                    goalAchievedAt = tsRaw.flatMap(parseDate)
+                    goalAchievedIndexAssistant = assistantCount
                 }
             }
         }
+
+        let activeGoal: GoalStatus? = {
+            guard let condition = goalCondition, let startedAt = goalStartedAt else {
+                return nil
+            }
+            // For an active goal, turnsElapsed = total assistant messages
+            // seen minus the count at the start marker. For an achieved
+            // goal, we freeze the elapsed count at achievement time so the
+            // "took N turns" figure doesn't keep growing.
+            let endIndex = goalAchievedIndexAssistant ?? assistantCount
+            let turns = max(0, endIndex - goalStartIndexAssistant)
+            return GoalStatus(
+                condition: condition,
+                startedAt: startedAt,
+                achievedAt: goalAchievedAt,
+                turnsElapsed: turns
+            )
+        }()
 
         return SessionQuickStats(
             tokens: tokens,
@@ -257,7 +343,8 @@ enum JSONLParser {
             model: model,
             lastTurnUsage: lastTurnUsage,
             truncated: false,
-            skillCounts: skillCounts
+            skillCounts: skillCounts,
+            activeGoal: activeGoal
         )
     }
 

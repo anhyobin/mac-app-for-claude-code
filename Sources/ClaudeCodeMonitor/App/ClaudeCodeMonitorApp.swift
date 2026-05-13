@@ -20,8 +20,19 @@ struct ClaudeCodeMonitorApp: App {
                             .offset(x: 3, y: -2)
                     }
                 if !dataStore.activeSessions.isEmpty {
+                    // Goal indicator is folded into the count: when any active
+                    // session has an in-progress `/goal`, tint the count in
+                    // the accent color instead of adding a separate glyph.
+                    // A third 8pt mark next to the dot and icon was too easy
+                    // to misread as a second status dot.
                     Text("\(dataStore.activeSessions.count)")
                         .font(.caption2)
+                        .foregroundStyle(dataStore.hasActiveGoal
+                                         ? Color.accentColor
+                                         : .primary)
+                        .accessibilityLabel(dataStore.hasActiveGoal
+                                            ? "\(dataStore.activeSessions.count) sessions, goal in progress"
+                                            : "\(dataStore.activeSessions.count) sessions")
                 }
             }
         }

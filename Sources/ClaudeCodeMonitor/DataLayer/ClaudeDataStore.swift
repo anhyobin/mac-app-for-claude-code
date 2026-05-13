@@ -264,6 +264,7 @@ final class ClaudeDataStore {
         let previousLastTurn = expandedSessionData[sessionId]?.mainLastTurnUsage
         let previousTruncated = expandedSessionData[sessionId]?.mainTruncated ?? false
         let previousMainSkillCounts = expandedSessionData[sessionId]?.mainSkillCounts
+        let previousActiveGoal = expandedSessionData[sessionId]?.activeGoal
 
         let result = await Task.detached {
             let agents = SubagentLoader.loadAgents(
@@ -294,6 +295,7 @@ final class ClaudeDataStore {
             let mainLastTurnUsage: TokenUsage?
             let mainTruncated: Bool
             let mainSkillCounts: [String: Int]
+            let mainActiveGoal: GoalStatus?
             if let prevMtime = previousMtime,
                let curMtime = currentMtime,
                prevMtime == curMtime,
@@ -306,6 +308,9 @@ final class ClaudeDataStore {
                 mainLastTurnUsage = previousLastTurn
                 mainTruncated = previousTruncated
                 mainSkillCounts = cachedSkills
+                // activeGoal is cached alongside other mtime-gated stats.
+                // `nil` is a valid cached value (session has no goal history).
+                mainActiveGoal = previousActiveGoal
             } else {
                 let stats = JSONLParser.scanTokensAndThinking(at: mainJSONLPath)
                 mainTokens = stats.tokens
@@ -314,6 +319,7 @@ final class ClaudeDataStore {
                 mainLastTurnUsage = stats.lastTurnUsage
                 mainTruncated = stats.truncated
                 mainSkillCounts = stats.skillCounts
+                mainActiveGoal = stats.activeGoal
             }
 
             // Total = main session tokens + all subagent tokens
@@ -332,11 +338,25 @@ final class ClaudeDataStore {
                 mainModel: mainModel,
                 mainLastTurnUsage: mainLastTurnUsage,
                 mainTruncated: mainTruncated,
-                mainSkillCounts: mainSkillCounts
+                mainSkillCounts: mainSkillCounts,
+                activeGoal: mainActiveGoal
             )
         }.value
 
         expandedSessionData[sessionId] = result
+    }
+
+    // MARK: - Goal Indicator
+
+    /// `true` when at least one active session has a `/goal` currently in
+    /// progress (not yet achieved). Drives the small target indicator next
+    /// to the menu-bar dot. Intentionally separate from ``menuBarDotState``
+    /// so the dot's priority ladder (error/warning/active) stays untouched —
+    /// goal status is a parallel signal, not a higher-priority replacement.
+    var hasActiveGoal: Bool {
+        activeSessions.contains { session in
+            expandedSessionData[session.id]?.activeGoal?.isActive == true
+        }
     }
 
     func loadAgentDetail(sessionId: String, agentHash: String, projectPath: String, forceRefresh: Bool = false) async {

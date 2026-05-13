@@ -38,6 +38,15 @@ struct SessionExpandedData: Sendable {
     /// ``totalSkillCounts``.
     let mainSkillCounts: [String: Int]
 
+    /// Most recent `/goal` state for the main session.
+    ///
+    /// `nil` when the session has no goal history, when the JSONL was
+    /// truncated (>50MB cap), or when the file couldn't be read. When the
+    /// goal has been achieved, `achievedAt` is populated; when it's still
+    /// being worked on, `achievedAt` is nil and `isActive` is true. Used by
+    /// the GoalBanner UI row.
+    let activeGoal: GoalStatus?
+
     /// Session-wide Skill invocation totals = main + every subagent (active
     /// AND completed). The view layer binds to this so that skill calls
     /// made by subagents remain visible after the agents drop off the

@@ -82,6 +82,17 @@ struct SessionRow: View {
                     .padding(.bottom, 2)
             }
 
+            // Goal banner. Placed between the gauge and the expanded detail
+            // block so "what Claude is trying to do" is visible without the
+            // user expanding the row. Shown for both active and achieved
+            // goals (the banner itself varies its visual by state).
+            if let expanded = dataStore.expandedSessionData[session.id],
+               let goal = expanded.activeGoal {
+                GoalBanner(goal: goal)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
+            }
+
             if isExpanded {
                 if let data = dataStore.expandedSessionData[session.id] {
                     SessionDetailView(

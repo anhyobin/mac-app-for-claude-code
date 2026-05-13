@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-13
+
+### Added
+- **`/goal` monitoring.** Claude Code CLI's `/goal <condition>` command
+  installs a Stop hook that makes Claude keep taking turns until the
+  condition is judged met; previously there was no signal outside the
+  terminal that a session was under this mode. The app now surfaces
+  active goals in two places:
+  - **Menu-bar count tint** — the active-session count next to the
+    status dot shifts to the system accent color whenever at least one
+    active session has an in-progress goal. A separate glyph was
+    rejected because a third 8pt mark beside the icon and status dot
+    was too easily misread as a second status indicator; folding the
+    signal into the count keeps the menu bar uncluttered. Separate
+    from the status dot's priority stack (error/warning/active) so
+    goal state reads as a parallel signal, not a replacement for
+    health.
+  - **Goal banner** inside each session row (between the context gauge
+    and the expanded detail block) showing the condition text and
+    elapsed time since the goal was installed. Collapsed view
+    truncates the condition to 2 lines; clicking
+    the banner expands it into a scrollable region (up to 180pt tall)
+    so multi-paragraph acceptance specs stay fully readable. The
+    expand chevron and clickable surface hide for short single-line
+    conditions so the collapsed row stays uncluttered and there is no
+    dead tap target. Active goals use an accent tint; achieved goals
+    step down to a neutral secondary tint with a "· Done" suffix —
+    intentionally NOT green, so the dot's green-means-active semantic
+    stays unambiguous.
+- **`GoalStatus` model** — snapshot of a session's most recent goal:
+  `condition`, `startedAt`, `achievedAt` (nil while active),
+  `turnsElapsed`, with derived `isActive` and `elapsed` properties.
+  `elapsed` freezes at `achievedAt` for achieved goals so the
+  "time taken" figure does not creep upward forever after completion.
+- **`GoalBanner` view** — compact SwiftUI row with intrinsic height so
+  `MenuBarExtra(.window) + ScrollView` stays stable. Uses a
+  banner-local `formatElapsed` helper (buckets `<60s` → "just now",
+  `<60m` → "Nm", `≥1h` → "Hh Mm") to avoid the shared
+  `RelativeTimeFormatter` rounding sub-minute intervals up to "1m",
+  which would misread a just-installed goal as a full minute elapsed.
+- **`GoalStatusParsingTests`** — six tests covering no-goal, active
+  goal turn counting, achieved-goal turn-freeze, most-recent-goal
+  override, multiline Korean condition preservation, and truncated
+  file fallback, plus an opt-in fixture check against a real JSONL
+  containing a goal event.
+
+### Changed
+- **`JSONLParser.scanTokensAndThinking`** now also tracks
+  `goal_status` attachment events in a single pass. Cheap string
+  guards (`"goal_status"` substring) keep JSON decoding off the hot
+  path for unrelated attachment rows. Parsing rules:
+  - `met: false, sentinel: true` is the start marker — captures
+    `condition` and timestamps when the goal was installed. A new
+    start always resets the tracker so the surfaced goal is the
+    most recent one (stale achievements for prior goals are dropped).
+  - `met: true` after a start marker is the achievement marker —
+    freezes `turnsElapsed` at the achievement turn.
+  - Orphan `met: true` with no prior start is ignored.
+- **`SessionQuickStats` / `SessionExpandedData`** gain an `activeGoal:
+  GoalStatus?` field. `nil` is a valid cached value (session has no
+  goal history, or file was truncated).
+- **`ClaudeDataStore.loadSessionDetail`** — mtime cache path now
+  includes `activeGoal` so goal state is refreshed at the same
+  cadence as tokens/thinking/skill counts, with no extra parse passes.
+- **`ClaudeDataStore.hasActiveGoal`** — new computed property that
+  returns true iff at least one active session has an in-progress
+  goal. Drives the menu-bar target indicator. Intentionally separate
+  from `menuBarDotState`'s priority stack.
+- `Info.plist` bundle version bumped to `0.4.0` (build `6`).
+
+### Notes
+- The `met: true` schema for achievements is a hypothesis based on
+  symmetry with the start marker and was exercised via tests. At the
+  time of release, no production JSONL with a `met: true` record has
+  been observed in the author's data; once one surfaces, the schema
+  may need a minor parser adjustment. The UI is designed to degrade
+  gracefully — an achievement that never arrives keeps the banner in
+  its active state, which is still useful.
+- Binary size grew +5.3% (1,220,912 → 1,285,488 bytes) vs v0.3.2.
+  `.app` bundle unchanged at 1.3 MB.
+
 ## [0.3.2] - 2026-05-11
 
 ### Fixed
@@ -139,7 +220,10 @@ Initial public release.
 - Self-contained `.app` bundle build via Swift Package Manager (no Xcode
   project, ~1.0 MB, arm64, ad-hoc signed).
 
-[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.2...v0.4.0
+[0.3.2]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.1.0...v0.1.1
