@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-21
+
+### Fixed
+- cwd에 공백이 포함된 세션의 main JSONL을 인식하지 못하던 문제. `PathDecoder.encodedProjectPath`가 `/`와 `.`만 `-`로 치환하고 공백은 그대로 두어 `~/.claude/projects/` 하위 디렉토리 매칭에 실패하던 케이스 수정. (예: `/Users/anhyobin/Documents/Solutions Arhitect/Public Events/Claude Webinar`)
+
 ## [0.4.0] - 2026-05-13
 
 ### Added
@@ -220,7 +225,8 @@ Initial public release.
 - Self-contained `.app` bundle build via Swift Package Manager (no Xcode
   project, ~1.0 MB, arm64, ad-hoc signed).
 
-[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/anhyobin/mac-app-for-claude-code/compare/v0.3.0...v0.3.1

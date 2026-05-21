@@ -12,5 +12,6 @@ enum PathDecoder {
         projectPath
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ".", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
     }
 }
