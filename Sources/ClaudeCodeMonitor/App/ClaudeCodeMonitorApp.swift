@@ -20,19 +20,16 @@ struct ClaudeCodeMonitorApp: App {
                             .offset(x: 3, y: -2)
                     }
                 if !dataStore.activeSessions.isEmpty {
-                    // Goal indicator is folded into the count: when any active
-                    // session has an in-progress `/goal`, tint the count in
-                    // the accent color instead of adding a separate glyph.
-                    // A third 8pt mark next to the dot and icon was too easy
-                    // to misread as a second status dot.
-                    Text("\(dataStore.activeSessions.count)")
-                        .font(.caption2)
-                        .foregroundStyle(dataStore.hasActiveGoal
-                                         ? Color.accentColor
-                                         : .primary)
-                        .accessibilityLabel(dataStore.hasActiveGoal
-                                            ? "\(dataStore.activeSessions.count) sessions, goal in progress"
-                                            : "\(dataStore.activeSessions.count) sessions")
+                    // Goal/workflow indicator folded into the count color.
+                    // Priority: goal (blue accent) > running workflow (purple)
+                    // > normal. Goal wins so an explicit /goal is never masked
+                    // by a workflow tint. Pulse when either signal is active.
+                    PulsingSessionCount(
+                        count: dataStore.activeSessions.count,
+                        tint: countTint,
+                        pulsing: shouldPulse,
+                        accessibilityText: accessibilityText
+                    )
                 }
             }
         }
@@ -52,6 +49,73 @@ struct ClaudeCodeMonitorApp: App {
             } else {
                 Image(systemName: "terminal.fill")
             }
+        }
+    }
+
+    /// Workflow accent purple — matches WorkflowSection.workflowColor.
+    private var workflowPurple: Color {
+        Color(red: 94/255, green: 92/255, blue: 230/255)
+    }
+
+    /// Count color priority: goal (blue) > running workflow (purple) > normal.
+    private var countTint: Color {
+        if dataStore.hasActiveGoal { return .accentColor }
+        if dataStore.hasRunningWorkflow { return workflowPurple }
+        return .primary
+    }
+
+    /// Pulse when either a goal or a workflow is active.
+    private var shouldPulse: Bool {
+        dataStore.hasActiveGoal || dataStore.hasRunningWorkflow
+    }
+
+    private var accessibilityText: String {
+        let n = dataStore.activeSessions.count
+        if dataStore.hasActiveGoal { return "\(n) sessions, goal in progress" }
+        if dataStore.hasRunningWorkflow { return "\(n) sessions, workflow running" }
+        return "\(n) sessions"
+    }
+}
+
+/// Active-session count with an optional pulsing tint. Modeled on
+/// ``MenuBarDot``'s `PulseRing`: the pulsing variant is a conditionally
+/// rendered subview so SwiftUI fires `onAppear` fresh each time pulsing
+/// begins — this makes a workflow that starts mid-session (after the
+/// always-present menu-bar label has already appeared) animate correctly,
+/// rather than freezing at a static dimmed opacity.
+private struct PulsingSessionCount: View {
+    let count: Int
+    let tint: Color
+    let pulsing: Bool
+    let accessibilityText: String
+
+    var body: some View {
+        Group {
+            if pulsing {
+                Pulsing(tint: tint, count: count)
+            } else {
+                Text("\(count)")
+                    .font(.caption2)
+                    .foregroundStyle(tint)
+            }
+        }
+        .accessibilityLabel(accessibilityText)
+    }
+
+    /// Fresh-mounted whenever `pulsing` flips true, so its `onAppear`
+    /// reliably starts the repeating fade. Opacity eases 1.0 → 0.4 forever.
+    private struct Pulsing: View {
+        let tint: Color
+        let count: Int
+        @State private var dim = false
+
+        var body: some View {
+            Text("\(count)")
+                .font(.caption2)
+                .foregroundStyle(tint)
+                .opacity(dim ? 0.4 : 1.0)
+                .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: dim)
+                .onAppear { dim = true }
         }
     }
 }
