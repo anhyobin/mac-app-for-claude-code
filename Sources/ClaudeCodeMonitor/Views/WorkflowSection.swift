@@ -84,37 +84,48 @@ private struct WorkflowRow: View {
     }
 
     @ViewBuilder private var header: some View {
-        Button {
-            // Only completed workflows toggle; running stays expanded (dead
-            // tap target avoided — chevron hidden when running).
-            if !workflow.isRunning { isExpanded.toggle() }
-        } label: {
-            HStack(spacing: 6) {
-                if !workflow.isRunning {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.tertiary)
-                }
-                Text(workflow.name)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(workflow.isRunning ? WorkflowSection.workflowColor : .primary)
-                Spacer()
-                Text(summaryLine)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        // A running workflow has nothing to toggle (always expanded), so it is
+        // a plain view — NOT a disabled Button. A `.disabled` Button dims its
+        // whole label subtree, which would mute the purple running-name (the
+        // feature's primary in-dropdown signal). Only the collapsible
+        // completed case is a Button. (App convention: no dead tap targets.)
+        if workflow.isRunning {
+            headerContent
+        } else {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                headerContent
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-        .disabled(workflow.isRunning)
 
         if workflow.isRunning && !workflow.phases.isEmpty {
             ProgressView(value: progressFraction)
                 .tint(WorkflowSection.workflowColor)
                 .scaleEffect(x: 1, y: 0.6, anchor: .center)
         }
+    }
+
+    private var headerContent: some View {
+        HStack(spacing: 6) {
+            // Chevron only on the collapsible (completed) case.
+            if !workflow.isRunning {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.tertiary)
+            }
+            Text(workflow.name)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(workflow.isRunning ? WorkflowSection.workflowColor : .primary)
+            Spacer()
+            Text(summaryLine)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .contentShape(Rectangle())
     }
 
     private var summaryLine: String {
