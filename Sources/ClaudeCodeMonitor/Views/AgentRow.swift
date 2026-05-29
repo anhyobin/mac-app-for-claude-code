@@ -5,6 +5,9 @@ struct AgentRow: View {
     let agent: SubagentInfo
     let sessionId: String
     let projectPath: String
+    /// When non-nil, this agent lives under `subagents/workflows/{id}/` and
+    /// detail loading must use the nested path. nil for flat subagents.
+    var workflowId: String? = nil
     @State private var isExpanded = false
 
     var body: some View {
@@ -16,7 +19,8 @@ struct AgentRow: View {
                         await dataStore.loadAgentDetail(
                             sessionId: sessionId,
                             agentHash: agent.id,
-                            projectPath: projectPath
+                            projectPath: projectPath,
+                            workflowId: workflowId
                         )
                     }
                 }
@@ -73,7 +77,7 @@ struct AgentRow: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                let key = "\(sessionId)/\(agent.id)"
+                let key = workflowId.map { "\(sessionId)/\($0)/\(agent.id)" } ?? "\(sessionId)/\(agent.id)"
                 if let detail = dataStore.agentDetailData[key] {
                     AgentDetailView(data: detail)
                         .padding(.top, 4)
