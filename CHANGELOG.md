@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-29
+
+### Added
+- **Opus 4.8 지원.** Claude Code `2.1.154`에서 도입된 `claude-opus-4-8`을
+  "Opus 4.8" 라벨로 인식. 4.8은 1M 컨텍스트가 API 표준(beta 헤더·`[1m]`
+  설정 불필요)이므로 4.7과 동일하게 settings.json 참조 없이 항상 1M로
+  컨텍스트 게이지를 계산 (`ModelContextLimits` inherent-1M 분기).
+
 ## [0.4.1] - 2026-05-21
 
 ### Fixed
