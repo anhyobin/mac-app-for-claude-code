@@ -66,8 +66,13 @@ enum SubagentLoader {
                 description = meta.description
             }
 
-            // Parse JSONL for tokens and tool counts
-            let (tokens, toolUseCount, messageCount, toolBreakdown, skillCounts) = scanAgentJSONL(at: jsonlPath)
+            // Parse JSONL for tokens and tool counts (shared scanner)
+            let scan = SubagentScan.scan(jsonlPath: jsonlPath)
+            let tokens = scan.tokens
+            let toolUseCount = scan.toolUseCount
+            let messageCount = scan.messageCount
+            let toolBreakdown = scan.toolBreakdown
+            let skillCounts = scan.skillCounts
 
             agents.append(SubagentInfo(
                 id: hash,
@@ -91,60 +96,5 @@ enum SubagentLoader {
             return a.tokens.total > b.tokens.total
         }
         return agents
-    }
-
-    private static func scanAgentJSONL(at path: URL) -> (TokenUsage, Int, Int, [String: Int], [String: Int]) {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path.path),
-              let fileSize = attrs[.size] as? UInt64,
-              fileSize <= 50 * 1024 * 1024 else {
-            return (TokenUsage(), 0, 0, [:], [:])
-        }
-
-        guard let data = try? Data(contentsOf: path) else {
-            print("[SubagentLoader] Failed to read: \(path.lastPathComponent)")
-            return (TokenUsage(), 0, 0, [:], [:])
-        }
-
-        let lines = data.split(separator: UInt8(ascii: "\n"))
-        var tokens = TokenUsage()
-        var toolUseCount = 0
-        var messageCount = 0
-        var toolBreakdown: [String: Int] = [:]
-        var skillCounts: [String: Int] = [:]
-
-        for lineData in lines {
-            let lineStr = String(decoding: lineData, as: UTF8.self)
-            guard lineStr.contains("\"type\":\"assistant\"") else { continue }
-
-            guard let entry = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let message = entry["message"] as? [String: Any] else { continue }
-
-            messageCount += 1
-
-            if let usage = message["usage"] as? [String: Any] {
-                tokens.add(TokenUsage(
-                    inputTokens: usage["input_tokens"] as? Int ?? 0,
-                    outputTokens: usage["output_tokens"] as? Int ?? 0,
-                    cacheReadTokens: usage["cache_read_input_tokens"] as? Int ?? 0,
-                    cacheWriteTokens: usage["cache_creation_input_tokens"] as? Int ?? 0
-                ))
-            }
-
-            if let content = message["content"] as? [[String: Any]] {
-                for block in content where block["type"] as? String == "tool_use" {
-                    toolUseCount += 1
-                    if let name = block["name"] as? String {
-                        toolBreakdown[name, default: 0] += 1
-                        if name == "Skill",
-                           let input = block["input"] as? [String: Any],
-                           let skill = input["skill"] as? String {
-                            skillCounts[skill, default: 0] += 1
-                        }
-                    }
-                }
-            }
-        }
-
-        return (tokens, toolUseCount, messageCount, toolBreakdown, skillCounts)
     }
 }
