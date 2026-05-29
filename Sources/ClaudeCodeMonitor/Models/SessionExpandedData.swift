@@ -2,6 +2,10 @@ import Foundation
 
 struct SessionExpandedData: Sendable {
     let agents: [SubagentInfo]
+    /// Workflow runs detected for this session (running + recently completed).
+    /// Empty for sessions that never ran a workflow. Sourced from
+    /// `subagents/workflows/` and `workflows/{id}.json` via ``WorkflowLoader``.
+    let workflows: [WorkflowInfo]
     let tasks: [TaskEntry]
     let mainTokens: TokenUsage
     let totalTokens: TokenUsage

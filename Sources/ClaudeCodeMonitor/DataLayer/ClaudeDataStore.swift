@@ -97,13 +97,37 @@ final class ClaudeDataStore {
             guard let session = activeSessions.first(where: { $0.id == sessionId }) else { continue }
             await loadSessionDetail(sessionId: sessionId, projectPath: session.cwd, forceRefresh: true)
 
-            // Only refresh detail for agents that are still active
+            // Refresh detail for still-active agents (flat subagents and
+            // workflow-phase agents). Keys are "sessionId/agentHash" (flat) or
+            // "sessionId/wfId/agentHash" (workflow); dispatch by shape.
             for key in agentDetailData.keys where key.hasPrefix(sessionId + "/") {
-                let agentHash = String(key.dropFirst(sessionId.count + 1))
-                if let agents = expandedSessionData[sessionId]?.agents,
-                   let agent = agents.first(where: { $0.id == agentHash }),
-                   agent.isActive {
-                    await loadAgentDetail(sessionId: sessionId, agentHash: agentHash, projectPath: session.cwd, forceRefresh: true)
+                let rest = key.dropFirst(sessionId.count + 1).split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+                let workflowId: String?
+                let agentHash: String
+                switch rest.count {
+                case 1:
+                    workflowId = nil
+                    agentHash = rest[0]
+                case 2:
+                    workflowId = rest[0]
+                    agentHash = rest[1]
+                default:
+                    continue
+                }
+
+                // Find the agent (flat list or workflow phases) to check isActive.
+                let agent: SubagentInfo?
+                if let workflowId {
+                    agent = expandedSessionData[sessionId]?.workflows
+                        .first { $0.id == workflowId }?
+                        .phases.flatMap { $0.agents }
+                        .first { $0.id == agentHash }
+                } else {
+                    agent = expandedSessionData[sessionId]?.agents.first { $0.id == agentHash }
+                }
+
+                if let agent, agent.isActive {
+                    await loadAgentDetail(sessionId: sessionId, agentHash: agentHash, projectPath: session.cwd, workflowId: workflowId, forceRefresh: true)
                 }
             }
         }
@@ -265,12 +289,18 @@ final class ClaudeDataStore {
         let previousTruncated = expandedSessionData[sessionId]?.mainTruncated ?? false
         let previousMainSkillCounts = expandedSessionData[sessionId]?.mainSkillCounts
         let previousActiveGoal = expandedSessionData[sessionId]?.activeGoal
+        let previousWorkflows = expandedSessionData[sessionId]?.workflows
 
         let result = await Task.detached {
             let agents = SubagentLoader.loadAgents(
                 sessionId: sessionId,
                 projectPath: projectPath,
                 previousAgents: previousAgents
+            )
+            let workflows = WorkflowLoader.loadWorkflows(
+                sessionId: sessionId,
+                projectPath: projectPath,
+                previous: previousWorkflows
             )
             let tasks = TaskLoader.loadTasks(for: sessionId)
 
@@ -330,6 +360,7 @@ final class ClaudeDataStore {
 
             return SessionExpandedData(
                 agents: agents,
+                workflows: workflows,
                 tasks: tasks,
                 mainTokens: mainTokens,
                 totalTokens: totalTokens,
@@ -359,26 +390,48 @@ final class ClaudeDataStore {
         }
     }
 
-    func loadAgentDetail(sessionId: String, agentHash: String, projectPath: String, forceRefresh: Bool = false) async {
-        let key = "\(sessionId)/\(agentHash)"
+    /// `true` when at least one active session has a workflow currently
+    /// running. Drives the menu-bar count tint (workflow purple). Parallel
+    /// to ``hasActiveGoal`` — goal tint takes priority when both are active
+    /// (see ClaudeCodeMonitorApp), so a running goal is never masked.
+    var hasRunningWorkflow: Bool {
+        activeSessions.contains { session in
+            expandedSessionData[session.id]?.workflows.contains { $0.isRunning } == true
+        }
+    }
+
+    func loadAgentDetail(sessionId: String, agentHash: String, projectPath: String, workflowId: String? = nil, forceRefresh: Bool = false) async {
+        let key = workflowId.map { "\(sessionId)/\($0)/\(agentHash)" } ?? "\(sessionId)/\(agentHash)"
         if !forceRefresh, agentDetailData[key] != nil { return }
 
         // Get full tool & skill breakdowns from already-loaded SubagentInfo
-        let cachedBreakdown = expandedSessionData[sessionId]?
-            .agents.first { $0.id == agentHash }?.toolBreakdown ?? [:]
-        let cachedSkills = expandedSessionData[sessionId]?
-            .agents.first { $0.id == agentHash }?.skillCounts ?? [:]
+        // (flat agent or workflow-phase agent).
+        let sourceAgents: [SubagentInfo]
+        if let workflowId {
+            sourceAgents = expandedSessionData[sessionId]?.workflows
+                .first { $0.id == workflowId }?
+                .phases.flatMap { $0.agents } ?? []
+        } else {
+            sourceAgents = expandedSessionData[sessionId]?.agents ?? []
+        }
+        let cachedBreakdown = sourceAgents.first { $0.id == agentHash }?.toolBreakdown ?? [:]
+        let cachedSkills = sourceAgents.first { $0.id == agentHash }?.skillCounts ?? [:]
 
         let encodedPath = PathDecoder.encodedProjectPath(from: projectPath)
         let projectsDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/projects")
 
         let result = await Task.detached {
-            let agentPath = projectsDir
+            var agentDir = projectsDir
                 .appendingPathComponent(encodedPath)
                 .appendingPathComponent(sessionId)
                 .appendingPathComponent("subagents")
-                .appendingPathComponent("agent-\(agentHash).jsonl")
+            if let workflowId {
+                agentDir = agentDir
+                    .appendingPathComponent("workflows")
+                    .appendingPathComponent(workflowId)
+            }
+            let agentPath = agentDir.appendingPathComponent("agent-\(agentHash).jsonl")
 
             let messages = JSONLParser.parseRecentMessages(at: agentPath)
             let fileChanges = JSONLParser.extractFileChanges(at: agentPath)

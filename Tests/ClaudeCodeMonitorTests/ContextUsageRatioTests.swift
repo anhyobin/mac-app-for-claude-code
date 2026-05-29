@@ -18,6 +18,7 @@ final class ContextUsageRatioTests: XCTestCase {
     ) -> SessionExpandedData {
         SessionExpandedData(
             agents: [],
+            workflows: [],
             tasks: [],
             mainTokens: TokenUsage(), // intentionally unused by contextUsageRatio
             totalTokens: TokenUsage(),
