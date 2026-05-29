@@ -18,6 +18,14 @@ struct SessionDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Workflow runs (running + recently completed) — shown above the
+            // flat agent list so the phase structure stays prominent.
+            WorkflowSection(
+                workflows: data.workflows,
+                sessionId: sessionId,
+                projectPath: projectPath
+            )
+
             // Token summary
             if data.totalTokens.total > 0 {
                 // When subagents exist and main session has tokens, label it as "Total"
