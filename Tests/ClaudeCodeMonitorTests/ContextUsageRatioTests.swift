@@ -115,6 +115,17 @@ final class ModelContextLimitsTests: XCTestCase {
         XCTAssertEqual(ModelContextLimits.maxContext(for: "claude-sonnet-4-7-20260315"), 1_000_000)
     }
 
+    /// Opus 4.8 ships with a 1M context window as the API default (no [1m]
+    /// setting required), same as 4.7. This MUST hold without any
+    /// ~/.claude/settings.json [1m] mapping — the JSONL model field never
+    /// carries [1m], so if this fell through to the broad "opus" branch it
+    /// would wrongly report 200K and over-report gauge fullness by 5x.
+    /// (This is the exact failure mode that bit Opus 4.7 in CC 2.1.117.)
+    func testOpus48IsOneMillion() {
+        XCTAssertEqual(ModelContextLimits.maxContext(for: "claude-opus-4-8"), 1_000_000)
+        XCTAssertEqual(ModelContextLimits.maxContext(for: "us.anthropic.claude-opus-4-8"), 1_000_000)
+    }
+
     func testOpus46FallsBackTo200K() {
         // Without settings.json mapping, opus-4-6 should default to 200K.
         // Note: This test result depends on whether the test machine's

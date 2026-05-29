@@ -9,7 +9,7 @@ import Foundation
 /// Values as of 2026-05:
 /// - Settings-based 1M detection: cross-references `~/.claude/settings.json` to
 ///   determine if the JSONL model is configured as a `[1m]` variant
-/// - Opus 4.7 / Sonnet 4.7: 1M context (inherent, no settings needed)
+/// - Opus 4.8 / Opus 4.7 / Sonnet 4.7: 1M context (inherent, no settings needed)
 /// - Opus 4.x / Sonnet 4.x (pre-4.7): 200K context
 /// - Unknown models: 200K (safe conservative default so the gauge never
 ///   under-reports fullness for an unrecognized model)
@@ -23,7 +23,7 @@ enum ModelContextLimits {
     /// Matching is case-insensitive and keyword-based. Priority order:
     /// 1. Settings-based detection — ``ClaudeSettingsReader/isOneMillionContext(for:)``
     ///    checks if the user's `~/.claude/settings.json` maps this model to a `[1m]` variant.
-    /// 2. The 4.7 generation — inherently 1M without needing the suffix.
+    /// 2. The 4.8 / 4.7 generation — inherently 1M without needing the suffix.
     /// 3. Broader "opus"/"sonnet-4" patterns — 200K models.
     ///
     /// Haiku is intentionally unlisted — every shipped Haiku version is 200K,
@@ -36,7 +36,7 @@ enum ModelContextLimits {
         if ClaudeSettingsReader.isOneMillionContext(for: rawModel) {
             return 1_000_000
         }
-        if lower.contains("opus-4-7") || lower.contains("sonnet-4-7") {
+        if lower.contains("opus-4-8") || lower.contains("opus-4-7") || lower.contains("sonnet-4-7") {
             return 1_000_000
         }
         if lower.contains("opus") || lower.contains("sonnet-4") {
