@@ -129,10 +129,16 @@ enum WorkflowLoader {
 - 완료 워크플로우: 기본 접힘(한 줄 요약), `@State` 토글로 펼침. (기존 completed-agents 패턴과 동일)
 - 에이전트 행: **기존 `AgentRow` 재사용.** 단 워크플로우 에이전트는 nested 경로가 필요하므로 §6.3.
 
-### 6.2 페이즈 상태 아이콘
-- 완료 페이즈: `checkmark` (초록/회색)
-- 진행 페이즈: 작은 스피너
-- 에이전트 점: 실행 중 = 주황, 완료 = 초록 (기존 `AgentRow.isActive` 색 규칙 계승)
+### 6.2 페이즈 상태 아이콘 (앱 색 컨벤션 준수 — `app-design-conventions` 메모리)
+- **완료 페이즈: `checkmark` — `.secondary` 색** (초록 아님). `.green`은 "active"에만 쓰는 규칙;
+  완료/acknowledged 상태에 green을 쓰면 "세션 active"와 시각 충돌 (v0.4.0에서 확정된 피드백).
+- 진행 페이즈: 작은 `ProgressView`(스피너).
+- **에이전트 점: 기존 `AgentRow`의 `isActive` 규칙 그대로 재사용 — active(mtime<60s)=초록 점,
+  완료=점 없음.** 별도 색(주황 등) 추가하지 않음. 실행 중 워크플로우에서 현재 쓰이는 에이전트는
+  jsonl mtime이 fresh하므로 `isActive=true`→초록 점이 자동으로 맞고, 완료 에이전트는 점 없음.
+- **chevron: collapsed=`chevron.right`, expanded=`chevron.down`** (앱 전역 규칙. `up/down` 금지).
+- **워크플로우 box 톤:** 실행 중 = `Color(보라 #5e5ce6).opacity(0.08)` + `cornerRadius(6, .continuous)`
+  (macOS sidebar-selection 관행, GoalBanner 표준). 완료 = `.secondary.opacity(0.06)` (inert 톤).
 
 ### 6.3 AgentRow / 상세 로더 — nested 경로 지원
 현재 `loadAgentDetail`은 경로를 `subagents/agent-{hash}.jsonl`로 하드코딩한다(`ClaudeDataStore.swift:377-381`).
