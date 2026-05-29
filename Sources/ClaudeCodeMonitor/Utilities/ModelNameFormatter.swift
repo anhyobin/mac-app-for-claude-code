@@ -29,9 +29,10 @@ enum ModelFamily: Sendable, Equatable {
 
 enum ModelNameFormatter {
     // Order matters: longer/more-specific patterns must come before shorter ones
-    // so that "opus-4-7" is not shadowed by a future "opus-4" entry. The 4-7
+    // so that "opus-4-7" is not shadowed by a future "opus-4" entry. The 4-8
     // generation is listed first because it is the current flagship.
     private static let knownModels: [(pattern: String, display: String)] = [
+        ("opus-4-8", "Opus 4.8"),
         ("opus-4-7", "Opus 4.7"),
         ("sonnet-4-7", "Sonnet 4.7"),
         ("haiku-4-7", "Haiku 4.7"),

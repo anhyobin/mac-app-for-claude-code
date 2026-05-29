@@ -203,6 +203,30 @@ final class ModelFamilyTests: XCTestCase {
         XCTAssertEqual(ModelNameFormatter.family(from: "gpt-4"), .unknown)
     }
 
+    func testOpus48Family() {
+        XCTAssertEqual(ModelNameFormatter.family(from: "claude-opus-4-8"), .opus)
+    }
+
+    /// 4.8 is the current flagship and must resolve to "Opus 4.8".
+    /// Provider-prefixed Bedrock/Vertex ids must also resolve. The "(1M)"
+    /// suffix is settings-dependent (same rule as 4.7), so only assert the
+    /// version number here.
+    func testOpus48DisplayName() {
+        let bare = ModelNameFormatter.displayName(from: "claude-opus-4-8")
+        XCTAssertTrue(bare == "Opus 4.8" || bare == "Opus 4.8 (1M)")
+        let prefixed = ModelNameFormatter.displayName(from: "us.anthropic.claude-opus-4-8")
+        XCTAssertTrue(prefixed == "Opus 4.8" || prefixed == "Opus 4.8 (1M)")
+    }
+
+    /// Ordering guard: opus-4-8 must not be shadowed by opus-4-7 / opus-4-6.
+    /// They don't substring-overlap, but knownModels mandates newest-first,
+    /// so a 4.8 string must never resolve to a "4.7" or "4.6" display.
+    func testOpus48NotShadowed() {
+        let d = ModelNameFormatter.displayName(from: "claude-opus-4-8")
+        XCTAssertFalse(d.contains("4.7"))
+        XCTAssertFalse(d.contains("4.6"))
+    }
+
     /// Regression guard: if the ordering in knownModels ever flips, a 4.7
     /// model string would start getting matched against the 4.6 pattern
     /// first. The "(1M)" suffix is settings-dependent so we only assert
