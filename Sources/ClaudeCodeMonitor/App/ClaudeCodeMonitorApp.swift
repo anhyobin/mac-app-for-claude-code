@@ -52,15 +52,12 @@ struct ClaudeCodeMonitorApp: App {
         }
     }
 
-    /// Workflow accent purple — matches WorkflowSection.workflowColor.
-    private var workflowPurple: Color {
-        Color(red: 94/255, green: 92/255, blue: 230/255)
-    }
-
     /// Count color priority: goal (blue) > running workflow (purple) > normal.
+    /// Purple is the single source of truth on ``WorkflowSection`` so the
+    /// menu-bar tint and the in-dropdown workflow accent never drift apart.
     private var countTint: Color {
         if dataStore.hasActiveGoal { return .accentColor }
-        if dataStore.hasRunningWorkflow { return workflowPurple }
+        if dataStore.hasRunningWorkflow { return WorkflowSection.workflowColor }
         return .primary
     }
 
