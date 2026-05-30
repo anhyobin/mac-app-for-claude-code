@@ -108,23 +108,33 @@ private struct WorkflowRow: View {
     }
 
     private var headerContent: some View {
-        HStack(spacing: 6) {
-            // Chevron only on the collapsible (completed) case.
-            if !workflow.isRunning {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.tertiary)
+        // Name and summary stack vertically rather than sharing one row: at the
+        // fixed 350pt dropdown width a long name + long summary would otherwise
+        // truncate the summary on the right. Stacking mirrors the other detail
+        // rows (Context:/Thinking:/Skills:) and loses no information.
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                // Chevron only on the collapsible (completed) case.
+                if !workflow.isRunning {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                }
+                Text(workflow.name)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(workflow.isRunning ? WorkflowSection.workflowColor : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
             }
-            Text(workflow.name)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(workflow.isRunning ? WorkflowSection.workflowColor : .primary)
-            Spacer()
             Text(summaryLine)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 
