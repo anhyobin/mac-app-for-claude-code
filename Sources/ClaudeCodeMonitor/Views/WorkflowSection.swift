@@ -132,14 +132,14 @@ private struct WorkflowRow: View {
         let phaseCount = workflow.phases.count
         var parts: [String] = []
         if workflow.isRunning {
-            parts.append("실행 중")
+            parts.append("running")
         } else {
-            parts.append("완료")
+            parts.append("completed")
         }
         if phaseCount > 0 {
-            parts.append("페이즈 \(workflow.completedPhaseCount)/\(phaseCount)")
+            parts.append("phase \(workflow.completedPhaseCount)/\(phaseCount)")
         }
-        parts.append("\(workflow.agentCount) 에이전트")
+        parts.append("\(workflow.agentCount) agents")
         parts.append(TokenFormatter.compact(workflow.totalTokens.total) + " tok")
         return parts.joined(separator: " · ")
     }
