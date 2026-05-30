@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-30
+
+### Added
+- **워크플로우 가시성.** dynamic workflow(에이전트 fan-out) 실행이 이제
+  세션 확장 뷰 상단의 "Workflows" 섹션에 페이즈별 에이전트 트리로 표시됨.
+  기존에는 워크플로우 에이전트가 `subagents/workflows/{id}/`(한 단계 깊은
+  경로)에 기록되어 `SubagentLoader`가 전혀 보지 못했음. 실행 중 워크플로우는
+  페이즈 트리가 펼쳐지고 진행률 바·누적 토큰을 표시하며, 완료된 워크플로우는
+  접힌 요약으로 보여줌(클릭 시 펼침). 각 에이전트는 클릭하면 기존 에이전트
+  상세(최근 메시지·수정 파일·도구 분석)로 펼쳐짐. 메뉴바 세션 수는 워크플로우
+  실행 중일 때 보라색으로 은은히 펄스(`/goal` 진행 시에는 파랑 우선). 실행 중
+  판정은 `journal.jsonl`의 미완료 `started` 이벤트로 감지하고, 완료 시점에만
+  기록되는 `workflows/{id}.json`의 `status:"completed"`를 명확한 완료 신호로 사용.
+
 ## [0.5.0] - 2026-05-29
 
 ### Added
