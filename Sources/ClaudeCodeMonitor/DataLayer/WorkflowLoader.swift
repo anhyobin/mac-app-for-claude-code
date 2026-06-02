@@ -31,16 +31,71 @@ enum WorkflowLoader {
         return name.isEmpty ? nil : name
     }
 
+    /// Per-agent terminal states from `workflowProgress`. Once an agent reaches
+    /// one of these it will not progress further, so its phase should read as
+    /// complete regardless of file mtime.
+    private static let terminalAgentStates: Set<String> = ["done", "error"]
+
+    /// Extract phase titles from a workflow script's `meta.phases` literal.
+    ///
+    /// Mid-run there is no `workflows/{id}.json`, but the script
+    /// (`scripts/{name}-{id}.js`, written at start) carries a pure-literal
+    /// `meta.phases: [{title, detail}, …]`. This recovers just the ordered
+    /// titles — agents cannot be attributed to phases while running, so the
+    /// running view shows the plan skeleton only. Returns [] if absent.
+    static func phaseTitles(fromScript js: String) -> [String] {
+        // Anchor at the meta block so a schema property named "phases"
+        // elsewhere in the script can't be matched first.
+        let searchStart = js.range(of: "export const meta")?.upperBound ?? js.startIndex
+        guard let phasesKw = js.range(of: "phases", range: searchStart..<js.endIndex),
+              let open = js.range(of: "[", range: phasesKw.upperBound..<js.endIndex)
+        else { return [] }
+
+        // Walk to the matching ']' (bracket-balanced; tolerates ']' in strings
+        // well enough for the literal-only meta block).
+        var depth = 0
+        var endIdx: String.Index?
+        var i = open.lowerBound
+        while i < js.endIndex {
+            switch js[i] {
+            case "[": depth += 1
+            case "]":
+                depth -= 1
+                if depth == 0 { endIdx = i }
+            default: break
+            }
+            if endIdx != nil { break }
+            i = js.index(after: i)
+        }
+        guard let end = endIdx else { return [] }
+        let literal = String(js[open.lowerBound...end])
+
+        guard let re = try? NSRegularExpression(
+            pattern: "title\\s*:\\s*['\"]([^'\"]+)['\"]") else { return [] }
+        let ns = literal as NSString
+        return re.matches(in: literal, range: NSRange(location: 0, length: ns.length))
+            .compactMap { m in m.numberOfRanges > 1 ? ns.substring(with: m.range(at: 1)) : nil }
+    }
+
     /// Build phases from a `workflowProgress` array, attaching each agent's
     /// label as the SubagentInfo description. Phases come out in index order.
+    ///
+    /// Phase completeness is driven by each agent's authoritative `state`
+    /// field ("done"/"error" = terminal) — NOT by `SubagentInfo.isActive`,
+    /// which is a 60s mtime heuristic. Using mtime made a just-finished
+    /// workflow read as "phase 0/n" until 60s elapsed, and the loader's
+    /// mtime-cache then froze that wrong snapshot permanently. When a progress
+    /// entry carries no `state` (older runs), completeness falls back to the
+    /// mtime heuristic so nothing regresses for data without state.
     static func mapAgentsToPhases(
         progress: [[String: Any]],
-        agentsById: [String: SubagentInfo]
+        agentsById: [String: SubagentInfo],
+        workflowCompleted: Bool = false
     ) -> [WorkflowPhase] {
         // Collect phase definitions, ordered by index.
         var phaseTitles: [(index: Int, title: String)] = []
-        // phaseIndex -> [(orderIndex, labelledAgent)]
-        var phaseAgents: [Int: [(Int, SubagentInfo)]] = [:]
+        // phaseIndex -> [(orderIndex, labelledAgent, state)]
+        var phaseAgents: [Int: [(order: Int, agent: SubagentInfo, state: String?)]] = [:]
 
         for item in progress {
             guard let type = item["type"] as? String else { continue }
@@ -53,6 +108,7 @@ enum WorkflowLoader {
                       let agentId = item["agentId"] as? String {
                 let order = item["index"] as? Int ?? 0
                 let label = item["label"] as? String
+                let state = item["state"] as? String
                 if var agent = agentsById[agentId] {
                     // Replace description with the workflow label.
                     agent = SubagentInfo(
@@ -66,7 +122,7 @@ enum WorkflowLoader {
                         skillCounts: agent.skillCounts,
                         lastActivity: agent.lastActivity
                     )
-                    phaseAgents[phaseIndex, default: []].append((order, agent))
+                    phaseAgents[phaseIndex, default: []].append((order, agent, state))
                 }
             }
         }
@@ -74,10 +130,24 @@ enum WorkflowLoader {
         return phaseTitles
             .sorted { $0.index < $1.index }
             .map { phase in
-                let agents = (phaseAgents[phase.index] ?? [])
-                    .sorted { $0.0 < $1.0 }
-                    .map { $0.1 }
-                let isComplete = !agents.isEmpty && agents.allSatisfy { !$0.isActive }
+                let entries = (phaseAgents[phase.index] ?? []).sorted { $0.order < $1.order }
+                let agents = entries.map { $0.agent }
+                // An empty declared phase ran no agents — either the workflow
+                // conditionally skipped it (done) or it hasn't started yet
+                // (pending). It mirrors the workflow's terminal status.
+                // For non-empty phases, terminal `state` is authoritative;
+                // absent state falls back to the mtime heuristic.
+                let isComplete: Bool
+                if entries.isEmpty {
+                    isComplete = workflowCompleted
+                } else {
+                    isComplete = entries.allSatisfy { entry in
+                        if let state = entry.state {
+                            return terminalAgentStates.contains(state)
+                        }
+                        return !entry.agent.isActive
+                    }
+                }
                 return WorkflowPhase(
                     id: phase.index,
                     title: phase.title,
@@ -160,22 +230,45 @@ enum WorkflowLoader {
                 ?? scriptName(in: wfScriptsDir, wfId: wfId, fm: fm)
                 ?? wfId
 
-            // Phases from workflowProgress, else single fallback phase.
+            // Flat agent list (most-recent first) — the running view's rows,
+            // and the file-sum fallback source for aggregates.
+            let flatAgents = Array(agentsById.values)
+                .sorted { ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast) }
+
+            // Authoritative aggregates: trust the completion-time state JSON
+            // (its totals are logical-agent figures, excluding the retry and
+            // nested-subagent files that inflate a raw on-disk sweep — e.g.
+            // 188 files vs 87 logical agents). While running, sum what's there.
+            var fileTokens = 0, fileToolCalls = 0
+            for agent in agentsById.values {
+                fileTokens += agent.tokens.total
+                fileToolCalls += agent.toolUseCount
+            }
+            let totalTokens = (state?["totalTokens"] as? Int) ?? fileTokens
+            let totalToolCalls = (state?["totalToolCalls"] as? Int) ?? fileToolCalls
+
             let progress = state?["workflowProgress"] as? [[String: Any]] ?? []
             let phases: [WorkflowPhase]
-            if progress.isEmpty {
-                let agents = Array(agentsById.values).sorted { ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast) }
-                phases = agents.isEmpty ? [] : [WorkflowPhase(id: 0, title: "Running", agents: agents, isComplete: false)]
-            } else {
-                phases = mapAgentsToPhases(progress: progress, agentsById: agentsById)
-            }
+            let agentCount: Int
+            let doneAgentCount: Int
 
-            // Aggregate tokens/tools across agents.
-            var totalTokens = TokenUsage()
-            var totalToolCalls = 0
-            for agent in agentsById.values {
-                totalTokens.add(agent.tokens)
-                totalToolCalls += agent.toolUseCount
+            if isRunning {
+                // No agentId→phase mapping exists mid-run; show the plan
+                // skeleton (titles only) from the script's meta.phases.
+                let titles = scriptContents(in: wfScriptsDir, wfId: wfId, fm: fm)
+                    .map { phaseTitles(fromScript: $0) } ?? []
+                phases = titles.enumerated().map { idx, title in
+                    WorkflowPhase(id: idx, title: title, agents: [], isComplete: false)
+                }
+                // Live aggregate from the journal; fall back to file count.
+                agentCount = journal.startedCount > 0 ? journal.startedCount : flatAgents.count
+                doneAgentCount = journal.finishedCount
+            } else {
+                phases = progress.isEmpty
+                    ? []
+                    : mapAgentsToPhases(progress: progress, agentsById: agentsById, workflowCompleted: true)
+                agentCount = (state?["agentCount"] as? Int) ?? flatAgents.count
+                doneAgentCount = agentCount   // completed → all done
             }
 
             workflows.append(WorkflowInfo(
@@ -183,9 +276,11 @@ enum WorkflowLoader {
                 name: name,
                 status: isRunning ? .running : .completed,
                 phases: phases,
+                agents: flatAgents,
                 totalTokens: totalTokens,
                 totalToolCalls: totalToolCalls,
-                agentCount: (state?["agentCount"] as? Int) ?? agentsById.count,
+                agentCount: agentCount,
+                doneAgentCount: doneAgentCount,
                 durationMs: state?["durationMs"] as? Int,
                 lastActivity: dirMtime
             ))
@@ -206,6 +301,14 @@ enum WorkflowLoader {
         guard let files = try? fm.contentsOfDirectory(atPath: scriptsDir.path) else { return nil }
         guard let match = files.first(where: { $0.contains(wfId) && $0.hasSuffix(".js") }) else { return nil }
         return workflowName(fromScriptFilename: match)
+    }
+
+    /// Read the script JS for a wf_id (carries `meta.phases`, written at start).
+    private static func scriptContents(in scriptsDir: URL, wfId: String, fm: FileManager) -> String? {
+        guard let files = try? fm.contentsOfDirectory(atPath: scriptsDir.path),
+              let match = files.first(where: { $0.contains(wfId) && $0.hasSuffix(".js") })
+        else { return nil }
+        return try? String(contentsOf: scriptsDir.appendingPathComponent(match), encoding: .utf8)
     }
 
     /// Parse all `agent-*.jsonl` in a workflow agent directory into

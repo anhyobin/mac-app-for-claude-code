@@ -16,6 +16,11 @@ enum WorkflowJournal {
         let unfinishedAgentIds: [String]
 
         var hasUnfinishedAgents: Bool { !unfinishedAgentIds.isEmpty }
+
+        /// Distinct agents that have launched. Live denominator for "M/N done".
+        var startedCount: Int { startedAgentIds.count }
+        /// Agents that launched and produced a `result`. Live numerator.
+        var finishedCount: Int { startedAgentIds.count - unfinishedAgentIds.count }
     }
 
     /// Parse raw journal text (newline-delimited JSON).

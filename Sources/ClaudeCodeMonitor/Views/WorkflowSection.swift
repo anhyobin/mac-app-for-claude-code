@@ -63,7 +63,23 @@ private struct WorkflowRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             header
-            if isExpanded {
+            if workflow.isRunning {
+                // Running: no agentId→phase mapping exists on disk yet, so show
+                // the plan skeleton (titles) as a breadcrumb, then the flat
+                // agent list. Per-phase attribution appears once completed.
+                if workflow.phases.count > 1 {
+                    phasePlanView
+                }
+                ForEach(workflow.agents) { agent in
+                    AgentRow(
+                        agent: agent,
+                        sessionId: sessionId,
+                        projectPath: projectPath,
+                        workflowId: workflow.id
+                    )
+                    .padding(.leading, 6)
+                }
+            } else if isExpanded {
                 ForEach(workflow.phases) { phase in
                     phaseView(phase)
                 }
@@ -83,6 +99,23 @@ private struct WorkflowRow: View {
         .animation(.easeInOut(duration: 0.15), value: isExpanded)
     }
 
+    /// Plan breadcrumb for a running workflow: "Research → Synthesize". Honest
+    /// about what's known mid-run (the phase plan) vs not (which agent is in
+    /// which phase).
+    private var phasePlanView: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "list.bullet.indent")
+                .font(.system(size: 8))
+                .foregroundStyle(.tertiary)
+            Text(workflow.phases.map(\.title).joined(separator: " → "))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.leading, 2)
+    }
+
     @ViewBuilder private var header: some View {
         // A running workflow has nothing to toggle (always expanded), so it is
         // a plain view — NOT a disabled Button. A `.disabled` Button dims its
@@ -100,7 +133,10 @@ private struct WorkflowRow: View {
             .buttonStyle(.plain)
         }
 
-        if workflow.isRunning && !workflow.phases.isEmpty {
+        // Agent-aggregate progress bar (doneAgentCount/agentCount). Gated on
+        // having agents, not phases — the phase skeleton may be empty (script
+        // without meta.phases) while the journal aggregate is still valid.
+        if workflow.isRunning && workflow.agentCount > 0 {
             ProgressView(value: progressFraction)
                 .tint(WorkflowSection.workflowColor)
                 .scaleEffect(x: 1, y: 0.6, anchor: .center)
@@ -139,24 +175,26 @@ private struct WorkflowRow: View {
     }
 
     private var summaryLine: String {
-        let phaseCount = workflow.phases.count
         var parts: [String] = []
         if workflow.isRunning {
+            // Per-phase progress isn't knowable mid-run; report the agent
+            // aggregate (journal-accurate "M/N done") instead.
             parts.append("running")
+            parts.append("\(workflow.doneAgentCount)/\(workflow.agentCount) agents")
         } else {
             parts.append("completed")
+            if !workflow.phases.isEmpty {
+                parts.append("phase \(workflow.completedPhaseCount)/\(workflow.phases.count)")
+            }
+            parts.append("\(workflow.agentCount) agents")
         }
-        if phaseCount > 0 {
-            parts.append("phase \(workflow.completedPhaseCount)/\(phaseCount)")
-        }
-        parts.append("\(workflow.agentCount) agents")
-        parts.append(TokenFormatter.compact(workflow.totalTokens.total) + " tok")
+        parts.append(TokenFormatter.compact(workflow.totalTokens) + " tok")
         return parts.joined(separator: " · ")
     }
 
     private var progressFraction: Double {
         guard workflow.agentCount > 0 else { return 0 }
-        return min(1.0, Double(workflow.completedAgentCount) / Double(workflow.agentCount))
+        return min(1.0, Double(workflow.doneAgentCount) / Double(workflow.agentCount))
     }
 
     @ViewBuilder private func phaseView(_ phase: WorkflowPhase) -> some View {

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-06-03
+
+### Fixed
+- **Workflow phase counts stuck at "1/3" or "0/2" even after the run
+  finished.** Phase completeness was derived from the agents' 60-second
+  mtime heuristic (`isActive`), so a just-finished workflow whose last
+  phase still had freshly-touched agent files read as incomplete — and the
+  mtime cache then froze that wrong snapshot permanently. Phase completeness
+  now uses the authoritative per-agent `state` field ("done"/"error" =
+  terminal) from `workflows/{id}.json`, falling back to the mtime heuristic
+  only for older data that lacks `state`. Verified against all 27 completed
+  workflows on disk — every one now reports an accurate `n/n`.
+- **Conditionally-skipped phases shown as forever-incomplete.** A declared
+  phase that dispatched zero agents (e.g. a "Fix" phase with nothing to fix)
+  was counted as incomplete even on a finished workflow, producing counts
+  like `2/3`. An empty phase now mirrors the workflow's terminal status
+  (completed → done, running → pending).
+- **Mismatched token and agent totals.** The loader summed tokens across
+  every agent file on disk (including retries and nested sub-agents — e.g.
+  188 files) while `agentCount` came from the state JSON (e.g. 87),
+  producing inconsistent figures. When the state JSON is present, its
+  pre-computed `totalTokens`/`totalToolCalls`/`agentCount` (the logical-agent
+  totals) are now treated as authoritative.
+
+### Added
+- **Phase skeleton and agent-progress aggregate for running workflows.**
+  The agent-to-phase mapping is only written to disk at completion, so a
+  running workflow now shows its phase skeleton (names and order, e.g.
+  `Research → Build → Verify`) parsed from the script's `meta.phases`, plus
+  an accurate "M/N agents done" aggregate computed from `journal.jsonl`
+  started/result events. Per-phase agent attribution remains a
+  completed-only view (mid-run attribution is not recoverable from disk).
+
 ## [0.6.0] - 2026-05-30
 
 ### Added
